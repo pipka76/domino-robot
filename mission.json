@@ -1,0 +1,144 @@
+{
+  "_": "Popisný soubor robota Domino. Klíče začínající _ jsou komentáře. Jednotky: mm, stupně, deg/s, s. Úhel turn kladně = vlevo (CCW).",
+  "version": 1,
+  "side": "left",
+  "active_mission": "main",
+  "time_limit_s": 88,
+  "start_delay_s": 0,
+
+  "field": {
+    "_": "Barvy kostek podle VARIANTA_FINAL. top/bottom: zleva doprava, [horní, dolní] polovina. left/right: shora dolů, [levá, pravá] polovina.",
+    "layouts": {
+      "left": {
+        "top":    [["BLUE", "RED"],    ["RED", "GREEN"],   ["GREEN", "YELLOW"], ["YELLOW", "YELLOW"]],
+        "left":   [["GREEN", "BLUE"],  ["GREEN", "GREEN"], ["BLUE", "GREEN"],   ["BLUE", "BLUE"]],
+        "right":  [["GREEN", "YELLOW"],["RED", "GREEN"],   ["YELLOW", "RED"],   ["BLUE", "YELLOW"]],
+        "bottom": [["BLUE", "RED"],    ["RED", "RED"],     ["RED", "YELLOW"],   ["YELLOW", "BLUE"]]
+      },
+      "right": {
+        "top":    [["BLUE", "YELLOW"], ["YELLOW", "RED"],  ["RED", "RED"],      ["RED", "BLUE"]],
+        "left":   [["YELLOW", "BLUE"], ["RED", "YELLOW"],  ["GREEN", "RED"],    ["YELLOW", "GREEN"]],
+        "right":  [["BLUE", "BLUE"],   ["GREEN", "BLUE"],  ["GREEN", "GREEN"],  ["BLUE", "GREEN"]],
+        "bottom": [["YELLOW", "YELLOW"],["YELLOW", "GREEN"],["GREEN", "RED"],   ["RED", "BLUE"]]
+      }
+    },
+    "geometry_mm": {
+      "_": "Odhad z plánu (půlka ~1220x1600). Rozteč kostek v řadě, používá pick_row podle jména řady.",
+      "top_spacing": 200,
+      "bottom_spacing": 200,
+      "left_spacing": 280,
+      "right_spacing": 280
+    }
+  },
+
+  "robot": {
+    "ports": { "left": "A", "right": "B", "arm": "C", "colour": "S4", "gyro": "S3" },
+    "drive": {
+      "_": "deg_per_mm: stupně kola na 1 mm (kolo 56 mm ~ 2.05). wheel_deg_per_robot_deg: ze sample.py. left/right_dir = ±1 pro otočení směru motoru. gyro_sign: Brian gyro je kladné po směru hodin (pohled na šipky) -> -1 dává CCW+, je-li senzor šipkami nahoru.",
+      "deg_per_mm": 2.05,
+      "wheel_deg_per_robot_deg": 2.9,
+      "left_dir": 1,
+      "right_dir": 1,
+      "gyro_sign": -1,
+      "gyro_reboot_on_start": true,
+      "use_gyro": true,
+      "speed": 400,
+      "min_speed": 100,
+      "ramp_s": 0.35,
+      "decel_k": 3.0,
+      "heading_kp": 4.0,
+      "turn_speed": 300,
+      "turn_min_speed": 60,
+      "turn_kp": 6.0,
+      "turn_tol_deg": 1.5,
+      "dt": 0.01
+    },
+    "colour": {
+      "background": ["WHITE", "NONE"],
+      "line": "BLACK",
+      "debounce_reads": 3,
+      "line_target": 50,
+      "line_kp": 2.0
+    },
+    "arm": {
+      "_": "Motor C: rotace kostky i posun zásobníku. Hodnoty ze sample.py, doladit testem test_arm.",
+      "speed": 1000,
+      "shift_speed": 1400,
+      "extra_wait_s": 0.3,
+      "initial": { "rot": "CCW", "slot": "RIGHT" },
+      "rot_positions": { "CW": -1000, "NONE": 0, "CCW": 1000 },
+      "transitions": {
+        "_": "Posuny zásobníku: ROT,SLOT>ROT,SLOT = relativní stupně (mag_set_left / mag_set_right ze sample.py).",
+        "CCW,RIGHT>CW,LEFT": -4200,
+        "CW,RIGHT>CW,LEFT": -6800,
+        "NONE,RIGHT>CW,LEFT": -5100,
+        "CW,LEFT>CCW,RIGHT": 4200,
+        "CCW,LEFT>CCW,RIGHT": 6800,
+        "NONE,LEFT>CCW,RIGHT": 5100
+      }
+    },
+    "pick": {
+      "_": "seen_to_front: rotace, která natočí PRVNÍ viděnou polovinu kostky k přídi robota. physical_order: pořadí nabraných kostek v řadě po vyložení od přídě.",
+      "seen_to_front": "CW",
+      "fallback_rot": "CW",
+      "physical_order": [1, 2, 3, 4],
+      "shift_after": [2],
+      "approach_speed": 200,
+      "advance_speed": 300,
+      "first_max_mm": 400,
+      "gap_margin_mm": 100,
+      "wait_clear": true,
+      "clear_max_mm": 80,
+      "settle_mm": 0,
+      "advance_mm": 60,
+      "reads": 5
+    }
+  },
+
+  "macros": {
+    "unload": [
+      { "cmd": "arm", "rot": "NONE", "_": "narovnání kostky (záměr mag_correct ze sample.py) – ověřit" },
+      { "cmd": "wait", "s": 0.3 },
+      { "cmd": "drive", "mm": -150, "speed": 300 },
+      { "cmd": "arm", "slot": "toggle" },
+      { "cmd": "wait", "s": 0.5 },
+      { "cmd": "drive", "mm": 150, "speed": 300 },
+      { "cmd": "drive", "mm": -300, "speed": 300 }
+    ]
+  },
+
+  "missions": {
+    "main": [
+      { "_": "1. jízda: start u levého konce horní řady, robot míří doprava podél řady." },
+      { "cmd": "pick_row", "row": "top", "count": 4, "chain_id": "A" },
+      { "_": "přesun do žlutého obdélníku (převzato ze sample.py, doladit)" },
+      { "cmd": "turn", "deg": 135 },
+      { "cmd": "drive", "mm": 300 },
+      { "cmd": "turn", "deg": 45 },
+      { "cmd": "drive", "mm": 125 },
+      { "cmd": "unload" },
+
+      { "_": "2. jízda: pravý sloupec, navázat na řetěz A. Zapnout po odladění 1. jízdy." },
+      { "cmd": "turn", "deg": -90, "enabled": false },
+      { "cmd": "drive_until_colour", "colour": "line", "max_mm": 600, "enabled": false },
+      { "cmd": "pick_row", "row": "right", "count": 4, "chain_id": "B", "append_to": "A.rear", "join_end": "front", "enabled": false },
+      { "cmd": "unload", "enabled": false }
+    ],
+    "test_drive":  [ { "cmd": "drive", "mm": 500 }, { "cmd": "wait", "s": 1 }, { "cmd": "drive", "mm": -500 } ],
+    "test_turn":   [ { "cmd": "turn", "deg": 90 }, { "cmd": "wait", "s": 1 }, { "cmd": "turn", "deg": -90 }, { "cmd": "turn", "deg": 360 } ],
+    "test_colour": [ { "cmd": "print_colour", "seconds": 15 } ],
+    "test_line":   [ { "cmd": "print_colour", "seconds": 10, "reflected": true } ],
+    "test_arm":    [
+      { "cmd": "arm", "rot": "CW" }, { "cmd": "wait", "s": 1 },
+      { "cmd": "arm", "rot": "CCW" }, { "cmd": "wait", "s": 1 },
+      { "cmd": "arm", "slot": "LEFT" }, { "cmd": "wait", "s": 1 },
+      { "cmd": "arm", "slot": "RIGHT" }, { "cmd": "wait", "s": 1 },
+      { "cmd": "arm_home" }
+    ],
+    "test_pick":   [ { "cmd": "pick_row", "row": "top", "count": 2 } ],
+    "test_pick4":  [ { "cmd": "pick_row", "row": "top", "count": 4 } ],
+    "test_unload": [ { "cmd": "macro", "name": "unload" } ]
+  },
+
+  "mock": { "first_block_mm": 120, "block_visible_mm": 40, "reflected": 50 }
+}

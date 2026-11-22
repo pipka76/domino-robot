@@ -1,0 +1,90 @@
+"""Stavový automat motoru C: rotace kostky (NONE/CW/CCW) × slot zásobníku (LEFT/RIGHT).
+
+Nahrazuje příznaky IsCW/IsCCW/IsLeft/IsRight ze sample.py. Pohyby jsou relativní
+(motor se před každým pohybem nuluje, stejně jako v sample.py) a berou se z JSON:
+- robot.arm.transitions: "ROT,SLOT>ROT,SLOT": stupně – explicitní přechody
+  (hlavně posuny zásobníku, protože mechanismus není lineární),
+- robot.arm.rot_positions: poloha rotace v rámci jednoho slotu; přechod mezi
+  rotacemi bez explicitního záznamu = rozdíl poloh.
+"""
+from common import ROTS, SLOTS
+
+
+def _parse_key(key):
+    a, b = key.split(">")
+    r1, s1 = [x.strip().upper() for x in a.split(",")]
+    r2, s2 = [x.strip().upper() for x in b.split(",")]
+    return (r1, s1, r2, s2)
+
+
+class Mechanism:
+    def __init__(self, hw, arm_cfg, log=print):
+        self.hw = hw
+        self.cfg = arm_cfg
+        self.log = log
+        init = arm_cfg["initial"]
+        self.rot = init["rot"].upper()
+        self.slot = init["slot"].upper()
+        self.trans = {}
+        for k, v in arm_cfg["transitions"].items():
+            if k.startswith("_"):
+                continue
+            self.trans[_parse_key(k)] = v
+        self.rot_pos = arm_cfg["rot_positions"]
+
+    def state(self):
+        return (self.rot, self.slot)
+
+    def plan(self, rot=None, slot=None):
+        """Vrátí seznam pohybů [(stupně, rychlost, (rot, slot))] bez provedení."""
+        r, s = self.rot, self.slot
+        if slot is not None:
+            slot = slot.upper()
+            if slot == "TOGGLE":
+                slot = "LEFT" if s == "RIGHT" else "RIGHT"
+        target_slot = slot or s
+        target_rot = rot.upper() if rot else None
+        moves = []
+
+        if target_slot != s:
+            exact = (r, s, target_rot, target_slot)
+            if target_rot and exact in self.trans:
+                return [(self.trans[exact], self.cfg["shift_speed"], (target_rot, target_slot))]
+            cands = [k for k in self.trans if k[0] == r and k[1] == s and k[3] == target_slot]
+            if not cands:
+                raise ValueError("chybí přechod zásobníku z {},{} do slotu {}".format(r, s, target_slot))
+            k = cands[0]
+            moves.append((self.trans[k], self.cfg["shift_speed"], (k[2], k[3])))
+            r, s = k[2], k[3]
+
+        if target_rot and target_rot != r:
+            k = (r, s, target_rot, s)
+            deg = self.trans[k] if k in self.trans else self.rot_pos[target_rot] - self.rot_pos[r]
+            moves.append((deg, self.cfg["speed"], (target_rot, s)))
+        return moves
+
+    def goto(self, rot=None, slot=None):
+        for deg, speed, (r, s) in self.plan(rot, slot):
+            self.log("    arm {:+} deg  {},{} -> {},{}".format(deg, self.rot, self.slot, r, s))
+            self.hw.arm_move(deg, speed)
+            self.rot, self.slot = r, s
+
+    def home(self):
+        init = self.cfg["initial"]
+        self.goto(rot=init["rot"], slot=init["slot"])
+
+    def check(self):
+        """Ověří, že posun zásobníku je definovaný z každého stavu."""
+        errs = []
+        for k in self.trans:
+            for x, allowed in ((k[0], ROTS), (k[1], SLOTS), (k[2], ROTS), (k[3], SLOTS)):
+                if x not in allowed:
+                    errs.append("arm.transitions: neznámá hodnota {} v {}".format(x, k))
+        for r in ROTS:
+            if r not in self.rot_pos:
+                errs.append("arm.rot_positions: chybí {}".format(r))
+            for s in SLOTS:
+                other = "LEFT" if s == "RIGHT" else "RIGHT"
+                if not any(k[0] == r and k[1] == s and k[3] == other for k in self.trans):
+                    errs.append("arm.transitions: chybí posun zásobníku z {},{}".format(r, s))
+        return errs
