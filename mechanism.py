@@ -49,12 +49,12 @@ class Mechanism:
         if target_slot != s:
             exact = (r, s, target_rot, target_slot)
             if target_rot and exact in self.trans:
-                return [(self.trans[exact], self.cfg["shift_speed"], (target_rot, target_slot))]
+                return [(self._shift_deg(self.trans[exact], target_slot), self.cfg["shift_speed"], (target_rot, target_slot))]
             cands = [k for k in self.trans if k[0] == r and k[1] == s and k[3] == target_slot]
             if not cands:
                 raise ValueError("chybí přechod zásobníku z {},{} do slotu {}".format(r, s, target_slot))
             k = cands[0]
-            moves.append((self.trans[k], self.cfg["shift_speed"], (k[2], k[3])))
+            moves.append((self._shift_deg(self.trans[k], target_slot), self.cfg["shift_speed"], (k[2], k[3])))
             r, s = k[2], k[3]
 
         if target_rot and target_rot != r:
@@ -62,6 +62,11 @@ class Mechanism:
             deg = self.trans[k] if k in self.trans else self.rot_pos[target_rot] - self.rot_pos[r]
             moves.append((deg, self.cfg["speed"], (target_rot, s)))
         return moves
+
+    def _shift_deg(self, deg, target_slot):
+        """Přičte k posunu zásobníku korekci arm.shift_extra[slot] (vůle mechaniky), ve směru pohybu."""
+        extra = self.cfg.get("shift_extra", {}).get(target_slot, 0)
+        return deg + (extra if deg >= 0 else -extra)
 
     def goto(self, rot=None, slot=None):
         for deg, speed, (r, s) in self.plan(rot, slot):

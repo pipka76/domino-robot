@@ -58,15 +58,35 @@ class Hardware:
 
         if self.gyro is not None:
             if self.drive_cfg.get("gyro_reboot_on_start", True):
-                # reboot = rekalibrace gyra, robot musí stát v klidu
+                # reboot = rekalibrace gyra, robot musí stát v klidu.
+                # Pauza, aby se robot po stisku START přestal hýbat.
+                time.sleep(self.drive_cfg.get("gyro_calib_delay_s", 1.0))
                 self.gyro.reboot()
                 time.sleep(0.2)
             self.gyro.set_mode(self.gyro.Mode.ANGLE)
             if self.gyro.wait_until_ready(5000):
                 self.gyro.set_zero_point()
+                self._check_gyro_drift()
             else:
                 self.log("GYRO nepřipraveno, točím podle enkodérů")
                 self.gyro = None
+
+    def _check_gyro_drift(self):
+        """Krátce změří, jestli gyro v klidu neujíždí (špatná kalibrace). Jen varuje."""
+        s = self.drive_cfg.get("gyro_check_s", 1.0)
+        if not s:
+            return
+        a0 = self.gyro.angle()
+        time.sleep(s)
+        d = self.gyro.angle() - a0
+        if abs(d) >= 1:
+            self.log("! GYRO UJÍŽDÍ: {:+} deg za {} s v klidu – spusť kalibrace_gyra.py".format(d, s))
+            for _ in range(3):
+                audio.play_tone(300, 150)
+                time.sleep(0.25)
+        else:
+            self.log("gyro OK (drift {:+} deg za {} s)".format(d, s))
+        self.gyro.set_zero_point()
 
     # --- čas ---
     def now(self):
@@ -118,15 +138,49 @@ class Hardware:
         return self.col.reflected_value()
 
     # --- motor C ---
-    def arm_move(self, deg, speed):
-        """Relativní pohyb motoru C, čeká na dokončení (s timeoutem)."""
+    def _arm_start(self, deg, speed):
+        """Spustí relativní pohyb motoru C. Různé verze firmwaru Brian mají různá jména:
+        novější rotate_by_angle / rotate_to_angle, starší rotate_to (jako v sample.py).
+        Na dokončení se čeká v arm_move podle enkodéru, takže nezáleží, jestli volání blokuje."""
+        a = self.arm
+        if hasattr(a, "rotate_by_angle"):
+            a.rotate_by_angle(int(deg), int(speed), 0)
+            return
+        target = int(a.current_angle() + deg)
+        if hasattr(a, "rotate_to_angle"):
+            a.rotate_to_angle(target, int(speed), 0)
+        else:
+            a.rotate_to(target, int(speed), 0)
+
+    def arm_move(self, deg, speed, tol=15):
+        """Relativní pohyb motoru C, čeká na dokončení (s timeoutem).
+        Zablokování = enkodér se za arm.stall_s neposunul aspoň o 10 deg.
+        (is_stalled() z Brian API hlásí zablokování i při normálním těžkém posunu zásobníku.)"""
         self.check_time()
-        est_ms = abs(deg) * 1000.0 / max(abs(speed), 1)
-        timeout = int(est_ms * 1.5 + self.arm_cfg.get("extra_wait_s", 0.3) * 1000)
-        res = self.arm.rotate_by_angle(int(deg), int(speed), timeout)
-        if res == motors.MovementEnd.TIMED_OUT or self.arm.is_stalled():
-            self.arm.brake()  # při timeoutu se motor sám nezastaví
-            self.log("    arm: timeout/zablokováno (cíl {:+} deg)".format(deg))
+        est_s = abs(deg) / max(abs(speed), 1)
+        t0 = _now()
+        t_end = t0 + est_s * 1.5 + self.arm_cfg.get("extra_wait_s", 0.3)
+        stall_s = self.arm_cfg.get("stall_s", 0.5)
+        start = self.arm.current_angle()
+        target = start + deg
+        self._arm_start(deg, speed)
+        last_a, last_t = start, t0
+        while abs(target - self.arm.current_angle()) > tol:
+            now = _now()
+            a = self.arm.current_angle()
+            if abs(a - last_a) >= 10:
+                last_a, last_t = a, now
+            stalled = now - last_t > stall_s
+            if stalled or now > t_end:
+                self.arm.brake()  # při timeoutu se motor sám nezastaví
+                self.log("    arm: {} (cíl {:+} deg, ujel {:+} deg za {:.1f} s)".format(
+                    "ZABLOKOVÁNO" if stalled else "TIMEOUT", deg, int(a - start), now - t0))
+                return
+            self.check_time()
+            time.sleep(0.01)
+        dt = _now() - t0
+        self.log("    arm ok: {:+} deg za {:.2f} s (průměr {:.0f} deg/s, nastaveno {})".format(
+            deg, dt, abs(deg) / max(dt, 0.001), speed))
 
     # --- ostatní ---
     def beep(self, hz=880, ms=150):

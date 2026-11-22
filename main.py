@@ -35,6 +35,12 @@ def validate(cfg):
         if c not in COLOURS:
             errs.append("neznámá barva {}".format(c))
     errs += Mechanism(None, cfg["robot"]["arm"]).check()
+    stf = cfg["robot"]["pick"]["seen_to_front"]
+    for v in (stf.values() if isinstance(stf, dict) else [stf]):
+        if v not in ("CW", "CCW"):
+            errs.append("pick.seen_to_front: neplatná hodnota {}".format(v))
+    if isinstance(stf, dict) and set(stf) != {"LEFT", "RIGHT"}:
+        errs.append("pick.seen_to_front: musí mít klíče LEFT a RIGHT")
 
     groups = [("missions." + k, v) for k, v in cfg["missions"].items() if not k.startswith("_")]
     groups += [("macros." + k, v) for k, v in cfg.get("macros", {}).items() if not k.startswith("_")]
@@ -49,7 +55,7 @@ def validate(cfg):
             for p in a[1]:
                 if p not in st:
                     errs.append("{}[{}] {}: chybí parametr {}".format(where, i, st["cmd"], p))
-            if st["cmd"] == "pick_row" and st["row"] not in layouts.get(cfg["side"], {}):
+            if st["cmd"] in ("pick_row", "pick_prepare") and st["row"] not in layouts.get(cfg["side"], {}):
                 errs.append("{}[{}]: řada {} neexistuje".format(where, i, st["row"]))
             if st["cmd"] == "macro" and st["name"] not in cfg.get("macros", {}):
                 errs.append("{}[{}]: makro {} neexistuje".format(where, i, st["name"]))

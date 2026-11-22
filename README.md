@@ -19,6 +19,8 @@ Hlavní myšlenka: **co** robot dělá, je popsané v souboru `mission.json`. **
 | `hw_mock.py` | Simulace hardware pro zkoušení na PC |
 | `common.py` | Sdílené konstanty a pomocné funkce |
 | `sample.py` | Původní prototyp (jen pro referenci) |
+| `t_*.py` | Spouštěče testovacích misí (`t_arm.py` = mise `test_arm`, …) |
+| `kalibrace_gyra.py` | Ruční kalibrace gyra před jízdou |
 
 ---
 
@@ -42,7 +44,10 @@ Simulace vypíše jednotlivé kroky s časem, plán natočení kostek, pohyby mo
 2. V `mission.json` nastavte `"active_mission"` na misi, kterou chcete spustit, a `"side"` na půlku hřiště (`"left"` / `"right"`).
 3. Spusťte `main.py`.
 
-> Při startu se rekalibruje gyro. **Robot musí stát v klidu**, dokud se nerozjede.
+**Testy bez přepisování `active_mission`:** soubory `t_colour.py`, `t_line.py`, `t_drive.py`, `t_turn.py`, `t_arm.py`, `t_pick.py`, `t_pick4.py`, `t_unload.py` spustí rovnou odpovídající misi `test_…`. Nahrajte je vedle `main.py` a na kostce vyberte v **SD karta** → soubor → **START**.
+
+> **Gyro se kalibruje ručně** programem `kalibrace_gyra.py` před každou jízdou: položte robota, spusťte ho a **nehýbejte s ním**, dokud nepípne (cca 6 s). Vypíše, jestli gyro v klidu neujíždí.
+> Při startu mise se gyro už nerekalibruje (`gyro_reboot_on_start: false`), jen se 1 s měří drift (`gyro_check_s`). Když ujíždí, vypíše `! GYRO UJÍŽDÍ` a 3× hluboce pípne – pak znovu spusťte `kalibrace_gyra.py`.
 
 Před spuštěním se vždy zkontroluje `mission.json`. Pokud obsahuje chybu (neznámý příkaz, chybějící parametr, neplatnou barvu…), program vypíše `CHYBA: …` a nespustí se.
 
@@ -86,7 +91,9 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 | `wheel_deg_per_robot_deg` | stupně kola na 1° otočení robota (použije se jen bez gyra) | `test_turn` s `use_gyro: false` |
 | `left_dir`, `right_dir` | `1` / `-1`, pokud je motor namontovaný obráceně | robot má po `drive` jet dopředu |
 | `gyro_sign` | `-1` = gyro šipkami nahoru (Brian měří kladně po směru hodin) | `test_turn`: `90` musí otočit **doleva** |
-| `gyro_reboot_on_start` | rekalibrovat gyro při startu | |
+| `gyro_reboot_on_start` | rekalibrovat gyro při startu mise (`false` = ruční kalibrace přes `kalibrace_gyra.py`) | |
+| `gyro_calib_delay_s` | pauza před kalibrací, aby se robot přestal hýbat | |
+| `gyro_check_s` | jak dlouho se při startu měří drift gyra (`0` = neměřit) | |
 | `use_gyro` | jezdit rovně a zatáčet podle gyra | |
 | `speed`, `min_speed` | běžná a minimální rychlost (°/s) | |
 | `ramp_s` | doba rozjezdu | |
@@ -144,9 +151,11 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 | `drive` | `mm`, [`speed`], [`hold`] | Jízda rovně (záporné `mm` = couvání). `hold: false` vypne držení směru gyrem. |
 | `drive_time` | `s`, [`speed`] | Jízda daný čas (nouzová varianta jako v `sample.py`) |
 | `turn` | `deg`, [`speed`] | Otočení na místě, kladně = doleva |
+| `curve` | `deg`, [`inner`], [`outer`], [`s_per_90`], [`gyro`] | Zatáčka po oblouku (vnitřní kolo pomalu, vnější rychle), kladně = doleva. S gyrem zastaví na úhlu, jinak podle času. Výchozí hodnoty `drive.curve_*`. |
+| `pick_prepare` | `row` + stejné parametry jako `pick_row`, [`seen`], [`rot`] | Naplánuje řadu a předem natočí rameno pro 1. kostku, kterou nabere zatáčka (barva se bere z `layouts`, polovinu viděnou senzorem určuje `pick.seen_half`). |
 | `drive_until_colour` | `colour` **nebo** `not`, [`max_mm`], [`speed`], [`reverse`], [`debounce`] | Jede, dokud neuvidí barvu `colour` / dokud neuvidí něco jiného než `not`. Hodnoty: název barvy, seznam barev, `"line"` nebo `"background"`. |
 | `follow_line` | `mm`, [`edge`: left/right], [`speed`], [`kp`], [`target`] | Sledování hrany čáry podle odraženého světla |
-| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`] | Nabere kostky z řady (viz níže) |
+| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
 | `unload` | [`chain_id`], [`macro`] | Spustí makro `unload` a zapamatuje si položený řetěz |
 | `arm` | [`rot`], [`slot`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. |
 | `arm_home` | – | Vrátí motor C do stavu `initial` |

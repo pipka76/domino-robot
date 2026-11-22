@@ -21,6 +21,7 @@ class Context:
         self.mech = Mechanism(hw, cfg["robot"]["arm"], log)
         self.chains = {}      # id -> {"length", "ends"}
         self.loaded = None    # co je právě v robotu (výsledek pick_row)
+        self.prepared = None  # plán z pick_prepare (1. kostku nabere zatáčka)
         self.t0 = hw.now()
 
     def stamp(self):
@@ -52,6 +53,7 @@ def drive_mm(ctx, mm, speed=None, until=None, hold=True):
     t0 = hw.now()
     timeout = target / float(max(speed, 1)) * 2 + 2
     hit = False
+    integ = 0.0
     while True:
         l, r = hw.wheel_angles()
         done = (abs(l) + abs(r)) / 2
@@ -69,10 +71,22 @@ def drive_mm(ctx, mm, speed=None, until=None, hold=True):
             v = min(v, max(vmin, (target - done) * d.get("decel_k", 3.0)))
         corr = 0.0
         if h0 is not None:
-            corr = clamp((hw.gyro_angle() - h0) * d.get("heading_kp", 4.0), -v / 2, v / 2)
+            herr = hw.gyro_angle() - h0
+            integ = clamp(integ + herr * d.get("dt", 0.01), -50, 50)
+            corr = clamp(herr * d.get("heading_kp", 4.0) + integ * d.get("heading_ki", 0.0), -v / 2, v / 2)
         hw.drive_speed(sign * v + corr, sign * v - corr)
         hw.sleep(d.get("dt", 0.01))
     hw.stop()
+    l, r = hw.wheel_angles()
+    wheels = "kola L={:+.0f} P={:+.0f} deg".format(l, r)
+    if h0 is not None or hw.gyro_angle() is not None:
+        h1 = hw.gyro_angle()
+        if h0 is None:
+            ctx.log("    drive {:+.0f} mm bez gyra, gyro teď {:+.1f}, {}".format(mm, h1, wheels))
+        else:
+            ctx.log("    drive {:+.0f} mm, odchylka podle gyra {:+.1f} deg (kladně = doleva), {}".format(mm, h1 - h0, wheels))
+    else:
+        ctx.log("    drive {:+.0f} mm, {}".format(mm, wheels))
     return hit
 
 
@@ -87,13 +101,27 @@ def turn_deg(ctx, deg, speed=None):
     timeout = abs(deg) * d["wheel_deg_per_robot_deg"] / float(vmin) + 2
     if h0 is not None:
         target = h0 + deg
+        prev = None
+        timed_out = False
         while True:
             err = target - hw.gyro_angle()
-            if abs(err) <= tol or hw.now() - t0 > timeout:
+            if abs(err) <= tol:
                 break
+            # přejel cíl jen o kousek -> nevracet se (jinak kmitá kolem cíle)
+            if prev is not None and sgn(err) != sgn(prev) and abs(err) <= max(tol, 3):
+                break
+            if hw.now() - t0 > timeout:
+                timed_out = True
+                break
+            prev = err
             v = clamp(abs(err) * d.get("turn_kp", 6.0), vmin, speed)
             hw.drive_speed(-sgn(err) * v, sgn(err) * v)
             hw.sleep(d.get("dt", 0.01))
+        hw.stop()
+        ctx.log("    turn {:+.0f}: gyro {:+.0f} -> {:+.0f} (chyba {:+.0f}), {:.1f} s{}".format(
+            deg, h0, hw.gyro_angle(), target - hw.gyro_angle(), hw.now() - t0,
+            "  ! TIMEOUT" if timed_out else ""))
+        return
     else:
         target = abs(deg) * d["wheel_deg_per_robot_deg"]
         hw.reset_wheels()
@@ -107,6 +135,37 @@ def turn_deg(ctx, deg, speed=None):
             hw.drive_speed(-s * v, s * v)
             hw.sleep(d.get("dt", 0.01))
     hw.stop()
+
+
+def curve_deg(ctx, deg, inner=None, outer=None, s_per_90=None, use_gyro=None):
+    """Zatáčka po oblouku (ne na místě): vnitřní kolo pomalu, vnější rychle.
+    Kladně = doleva (CCW). S gyrem zastaví na úhlu, jinak podle času jako turn() v sample.py."""
+    hw, d = ctx.hw, ctx.drive
+    inner = d.get("curve_inner_speed", 100) if inner is None else inner
+    outer = d.get("curve_outer_speed", 500) if outer is None else outer
+    s_per_90 = d.get("curve_s_per_90", 1.34) if s_per_90 is None else s_per_90
+    use_gyro = d.get("curve_gyro", True) if use_gyro is None else use_gyro
+    s = sgn(deg)
+    l, r = (inner, outer) if s > 0 else (outer, inner)
+    t_est = s_per_90 * abs(deg) / 90.0
+    h0 = hw.gyro_angle() if use_gyro else None
+    t0 = hw.now()
+    hw.drive_speed(l, r)
+    if h0 is None:
+        hw.sleep(t_est)
+        hw.stop()
+        ctx.log("    curve {:+.0f}: podle času {:.2f} s".format(deg, t_est))
+        return
+    target = h0 + deg
+    timed_out = False
+    while sgn(target - hw.gyro_angle()) == s:
+        if hw.now() - t0 > t_est * 1.5 + 1:
+            timed_out = True
+            break
+        hw.sleep(d.get("dt", 0.01))
+    hw.stop()
+    ctx.log("    curve {:+.0f}: gyro {:+.0f} -> {:+.0f}, {:.2f} s{}".format(
+        deg, h0, hw.gyro_angle(), hw.now() - t0, "  ! TIMEOUT" if timed_out else ""))
 
 
 def until_colour(ctx, want=None, avoid=None, debounce=None):
@@ -155,6 +214,10 @@ def cmd_turn(ctx, st):
     turn_deg(ctx, st["deg"], st.get("speed"))
 
 
+def cmd_curve(ctx, st):
+    curve_deg(ctx, st["deg"], st.get("inner"), st.get("outer"), st.get("s_per_90"), st.get("gyro"))
+
+
 def cmd_drive_until_colour(ctx, st):
     want = _colour_set(ctx, st["colour"]) if "colour" in st else None
     avoid = _colour_set(ctx, st["not"]) if "not" in st else None
@@ -189,6 +252,8 @@ def cmd_follow_line(ctx, st):
 def choose_rot(ctx, seen, front, rear):
     pk, mech = ctx.pick, ctx.mech
     to_front = pk["seen_to_front"]
+    if isinstance(to_front, dict):  # zvlášť pro každý slot zásobníku
+        to_front = to_front[mech.slot]
     if front == rear:
         return mech.rot if mech.rot != "NONE" else to_front
     if seen == front:
@@ -199,12 +264,10 @@ def choose_rot(ctx, seen, front, rear):
     return pk["fallback_rot"]
 
 
-def cmd_pick_row(ctx, st):
-    pk = ctx.pick
+def _pick_plan(ctx, st):
     layout = ctx.cfg["field"]["layouts"][ctx.side][st["row"]]
     pairs = list(reversed(layout)) if st.get("reverse") else list(layout)
     pairs = pairs[:st.get("count", len(pairs))]
-
     join = None
     if st.get("append_to"):
         cid, end = st["append_to"].split(".")
@@ -213,15 +276,75 @@ def cmd_pick_row(ctx, st):
             ctx.log("    ! řetěz {} neexistuje, plánuji bez navázání".format(cid))
         else:
             join = (st.get("join_end", "front"), ch["ends"][end], ch["length"])
-    plan = planner.plan_line(pairs, pk["physical_order"], join)
+    plan = planner.plan_line(pairs, ctx.pick["physical_order"], join)
     ctx.log(planner.format_plan(pairs, plan))
+    return pairs, plan
+
+
+def advance_len(ctx, picked_after, base):
+    """Délka zasunutí kostky; před posunem zásobníku prodloužená o pick.shift_advance_mm."""
+    if picked_after in ctx.pick["shift_after"]:
+        return base + ctx.pick.get("shift_advance_mm", 0)
+    return base
+
+
+def shift_magazine(ctx):
+    """Posun zásobníku během nabírání (kostku před tím dotlačí delší advance, viz advance_len)."""
+    pk = ctx.pick
+    if pk.get("shift_wait_s"):
+        ctx.hw.sleep(pk["shift_wait_s"])
+    ctx.mech.goto(slot="toggle")
+
+
+def cmd_pick_prepare(ctx, st):
+    """Naplánuje řadu a PŘEDEM natočí rameno pro 1. kostku, kterou nabere zatáčka
+    (barvu nejde přečíst předem, bere se z layouts). Pak následuje pick_row s first_taken."""
+    pairs, plan = _pick_plan(ctx, st)
+    front, rear = plan["orient"][0]
+    rot = st.get("rot")
+    if rot:
+        ctx.log("    příprava: kostka 1 -> {} (zadáno ručně)".format(rot))
+    else:
+        half = st.get("seen", ctx.pick.get("seen_half", 0))
+        seen = pairs[0][half]
+        rot = choose_rot(ctx, seen, front, rear)
+        ctx.log("    příprava: kostka 1 {} – senzor by viděl {} (seen={}) -> {} (front={})".format(
+            pairs[0], seen, half, rot, front))
+    ctx.mech.goto(rot=rot)
+    ctx.prepared = {"row": st["row"], "pairs": pairs, "plan": plan, "st": dict(st)}
+
+
+def cmd_pick_row(ctx, st):
+    pk = ctx.pick
+    prep = None
+    if st.get("first_taken"):
+        prep = getattr(ctx, "prepared", None)
+        ctx.prepared = None
+        if prep is None or prep["row"] != st["row"]:
+            ctx.log("    ! first_taken bez pick_prepare pro řadu {} – nabírám normálně".format(st["row"]))
+            prep = None
+    if prep is not None:
+        args = dict(prep["st"])
+        args.update(st)
+        st = args
+        pairs, plan = prep["pairs"], prep["plan"]
+    else:
+        pairs, plan = _pick_plan(ctx, st)
 
     spacing = st.get("spacing_mm") or ctx.cfg["field"]["geometry_mm"].get(st["row"] + "_spacing", 200)
-    ctx.hw.mock_blocks(pairs, spacing)
+    ctx.hw.mock_blocks(pairs[1:] if prep is not None else pairs, spacing)
 
     bg = _colour_set(ctx, "background")
     picked = 0
     for i, (front, rear) in enumerate(plan["orient"]):
+        if i == 0 and prep is not None:
+            ctx.log("  {} kostka 1: nabraná zatáčkou, rameno připraveno {} (front={}), senzor teď vidí {}".format(
+                ctx.stamp(), ctx.mech.rot, front, ctx.hw.colour()))
+            drive_mm(ctx, advance_len(ctx, picked + 1, st.get("first_advance_mm", pk["advance_mm"])), pk.get("advance_speed"))
+            picked += 1
+            if picked in pk["shift_after"]:
+                shift_magazine(ctx)
+            continue
         if i > 0 and pk.get("wait_clear", True):
             drive_mm(ctx, pk.get("clear_max_mm", 80), pk["approach_speed"], until=until_colour(ctx, want=bg))
         max_mm = pk["first_max_mm"] if i == 0 else spacing + pk.get("gap_margin_mm", 100)
@@ -234,10 +357,10 @@ def cmd_pick_row(ctx, st):
         rot = choose_rot(ctx, seen, front, rear)
         ctx.log("  {} kostka {}: vidím {} -> {} (front={})".format(ctx.stamp(), i + 1, seen, rot, front))
         ctx.mech.goto(rot=rot)
-        drive_mm(ctx, pk["advance_mm"], pk.get("advance_speed"))
+        drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"]), pk.get("advance_speed"))
         picked += 1
         if picked in pk["shift_after"]:
-            ctx.mech.goto(slot="toggle")
+            shift_magazine(ctx)
     ctx.loaded = {"chain_id": st.get("chain_id"), "plan": plan, "count": picked,
                   "append_to": st.get("append_to"), "join_end": st.get("join_end", "front")}
 
@@ -300,6 +423,21 @@ def cmd_print_colour(ctx, st):
         ctx.hw.sleep(st.get("period", 0.3))
 
 
+def cmd_print_gyro(ctx, st):
+    """Vypisuje úhel gyra a kol – na zjištění driftu (robot stojí) a kontrolu proti skutečnosti."""
+    hw = ctx.hw
+    t0 = hw.now()
+    g0 = hw.gyro_angle()
+    while True:
+        g = hw.gyro_angle()
+        l, r = hw.wheel_angles()
+        ctx.log("    gyro={} (od začátku výpisu {:+}) kola L={:+.0f} P={:+.0f}".format(
+            g, None if g is None or g0 is None else g - g0, l, r))
+        if hw.now() - t0 >= st.get("seconds", 5):
+            break
+        hw.sleep(st.get("period", 1.0))
+
+
 # cmd -> (funkce, povinné parametry)
 ACTIONS = {
     "drive": (cmd_drive, ("mm",)),
@@ -308,6 +446,8 @@ ACTIONS = {
     "drive_until_colour": (cmd_drive_until_colour, ()),
     "follow_line": (cmd_follow_line, ("mm",)),
     "pick_row": (cmd_pick_row, ("row",)),
+    "pick_prepare": (cmd_pick_prepare, ("row",)),
+    "curve": (cmd_curve, ("deg",)),
     "unload": (cmd_unload, ()),
     "arm": (cmd_arm, ()),
     "arm_home": (cmd_arm_home, ()),
@@ -316,6 +456,7 @@ ACTIONS = {
     "beep": (cmd_beep, ()),
     "log": (cmd_log, ("msg",)),
     "print_colour": (cmd_print_colour, ()),
+    "print_gyro": (cmd_print_gyro, ()),
 }
 
 
