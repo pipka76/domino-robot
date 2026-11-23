@@ -22,6 +22,9 @@ class Context:
         self.chains = {}      # id -> {"length", "ends"}
         self.loaded = None    # co je právě v robotu (výsledek pick_row)
         self.prepared = None  # plán z pick_prepare (1. kostku nabere zatáčka)
+        # drive.absolute_heading: cílový směr (hodnota gyra) se počítá od startu mise, ne od
+        # toho, kam robot zrovna míří -> chyby otáček se nesčítají. None = ještě nezměřeno.
+        self.heading = None
         self.t0 = hw.now()
 
     def stamp(self):
@@ -40,6 +43,22 @@ def _colour_set(ctx, spec):
     return set(spec)
 
 
+def heading_ref(ctx):
+    """Směr, od kterého se počítá další jízda/otočka. Při drive.absolute_heading je to cílový
+    směr z předchozích otáček (od startu mise), jinak aktuální hodnota gyra."""
+    g = ctx.hw.gyro_angle()
+    if g is None or not ctx.drive.get("absolute_heading", False):
+        return g
+    if ctx.heading is None:
+        ctx.heading = g
+    return ctx.heading
+
+
+def set_heading(ctx, target):
+    if ctx.drive.get("absolute_heading", False):
+        ctx.heading = target
+
+
 def drive_mm(ctx, mm, speed=None, until=None, hold=True):
     """Jízda rovně o mm (enkodéry) s rampou, dobrzděním a držením směru gyrem.
     until: funkce bez parametrů -> True = zastavit. Vrací True, když zastavil `until`."""
@@ -49,7 +68,7 @@ def drive_mm(ctx, mm, speed=None, until=None, hold=True):
     sign = 1 if mm >= 0 else -1
     target = abs(mm) * d["deg_per_mm"]
     hw.reset_wheels()
-    h0 = hw.gyro_angle() if hold else None
+    h0 = heading_ref(ctx) if hold else None
     t0 = hw.now()
     timeout = target / float(max(speed, 1)) * 2 + 2
     hit = False
@@ -100,7 +119,8 @@ def turn_deg(ctx, deg, speed=None):
     t0 = hw.now()
     timeout = abs(deg) * d["wheel_deg_per_robot_deg"] / float(vmin) + 2
     if h0 is not None:
-        target = h0 + deg
+        target = heading_ref(ctx) + deg
+        set_heading(ctx, target)
         prev = None
         timed_out = False
         while True:
@@ -154,9 +174,12 @@ def curve_deg(ctx, deg, inner=None, outer=None, s_per_90=None, use_gyro=None):
     if h0 is None:
         hw.sleep(t_est)
         hw.stop()
+        if ctx.heading is not None:
+            ctx.heading += deg
         ctx.log("    curve {:+.0f}: podle času {:.2f} s".format(deg, t_est))
         return
-    target = h0 + deg
+    target = heading_ref(ctx) + deg
+    set_heading(ctx, target)
     timed_out = False
     while sgn(target - hw.gyro_angle()) == s:
         if hw.now() - t0 > t_est * 1.5 + 1:
@@ -282,10 +305,12 @@ def _pick_plan(ctx, st):
 
 
 def advance_len(ctx, picked_after, base):
-    """Délka zasunutí kostky; před posunem zásobníku prodloužená o pick.shift_advance_mm."""
+    """Délka zasunutí kostky; před posunem zásobníku prodloužená o pick.shift_advance_mm,
+    pro konkrétní kostku (pořadí od 1) navíc o pick.advance_extra_mm["N"]."""
+    mm = base + ctx.pick.get("advance_extra_mm", {}).get(str(picked_after), 0)
     if picked_after in ctx.pick["shift_after"]:
-        return base + ctx.pick.get("shift_advance_mm", 0)
-    return base
+        mm += ctx.pick.get("shift_advance_mm", 0)
+    return mm
 
 
 def shift_magazine(ctx):
@@ -390,7 +415,11 @@ def cmd_unload(ctx, st):
 
 
 def cmd_arm(ctx, st):
-    ctx.mech.goto(rot=st.get("rot"), slot=st.get("slot"))
+    if st.get("rot") or st.get("slot"):
+        ctx.mech.goto(rot=st.get("rot"), slot=st.get("slot"))
+    nudge = st.get("nudge")
+    if nudge:
+        ctx.mech.nudge(None if nudge is True else nudge)
 
 
 def cmd_arm_home(ctx, st):

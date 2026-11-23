@@ -152,15 +152,19 @@ class Hardware:
         else:
             a.rotate_to(target, int(speed), 0)
 
-    def arm_move(self, deg, speed, tol=15):
+    def arm_move(self, deg, speed, tol=15, stall_s=None, extra_wait_s=None):
         """Relativní pohyb motoru C, čeká na dokončení (s timeoutem).
         Zablokování = enkodér se za arm.stall_s neposunul aspoň o 10 deg.
-        (is_stalled() z Brian API hlásí zablokování i při normálním těžkém posunu zásobníku.)"""
+        (is_stalled() z Brian API hlásí zablokování i při normálním těžkém posunu zásobníku.)
+        stall_s=0 = hlídání zablokování vypnuté (jen timeout)."""
         self.check_time()
         est_s = abs(deg) / max(abs(speed), 1)
         t0 = _now()
-        t_end = t0 + est_s * 1.5 + self.arm_cfg.get("extra_wait_s", 0.3)
-        stall_s = self.arm_cfg.get("stall_s", 0.5)
+        if extra_wait_s is None:
+            extra_wait_s = self.arm_cfg.get("extra_wait_s", 0.3)
+        t_end = t0 + est_s * 1.5 + extra_wait_s
+        if stall_s is None:
+            stall_s = self.arm_cfg.get("stall_s", 0.5)
         start = self.arm.current_angle()
         target = start + deg
         self._arm_start(deg, speed)
@@ -170,7 +174,7 @@ class Hardware:
             a = self.arm.current_angle()
             if abs(a - last_a) >= 10:
                 last_a, last_t = a, now
-            stalled = now - last_t > stall_s
+            stalled = stall_s > 0 and now - last_t > stall_s
             if stalled or now > t_end:
                 self.arm.brake()  # při timeoutu se motor sám nezastaví
                 self.log("    arm: {} (cíl {:+} deg, ujel {:+} deg za {:.1f} s)".format(

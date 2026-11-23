@@ -95,7 +95,7 @@ class MockHardware:
         return self.mock_cfg.get("reflected", 50)
 
     # --- motor C ---
-    def arm_move(self, deg, speed):
+    def arm_move(self, deg, speed, tol=15, stall_s=None, extra_wait_s=None):
         self.arm_total += abs(deg)
         self.sleep(abs(deg) / float(speed) + 0.1)
 

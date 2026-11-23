@@ -74,6 +74,24 @@ class Mechanism:
             self.hw.arm_move(deg, speed)
             self.rot, self.slot = r, s
 
+    def nudge(self, deg=None):
+        """Dorovná zásobník, kdyby se vlivem vůle posunul. Motor C uvnitř slotu jen otáčí kostkou
+        (rot_positions), zásobník tlačí až za krajní polohou rotace: ve slotu RIGHT za CCW (+),
+        v LEFT za CW (-). Proto dojede do krajní rotace a pak ještě o nudge_deg dál.
+        Rotace pak zůstane v krajní poloze (CCW / CW)."""
+        extra = abs(deg if deg is not None else self.cfg.get("nudge_deg", 800))
+        end_rot, sign = ("CCW", 1) if self.slot == "RIGHT" else ("CW", -1)
+        move = self.rot_pos[end_rot] - self.rot_pos[self.rot] + sign * extra
+        if not move:
+            return
+        self.log("    arm dorovnání zásobníku {:+} deg  {},{} -> {},{} (+{} za krajní polohu)".format(
+            move, self.rot, self.slot, end_rot, self.slot, extra))
+        # Pevný počet stupňů, bez hlídání zablokování (na dorazu nefungovalo); krátký timeout,
+        # aby motor zbytečně netlačil do dorazu.
+        self.hw.arm_move(move, self.cfg.get("nudge_speed", self.cfg["shift_speed"]),
+                         stall_s=0, extra_wait_s=0.3)
+        self.rot = end_rot
+
     def home(self):
         init = self.cfg["initial"]
         self.goto(rot=init["rot"], slot=init["slot"])

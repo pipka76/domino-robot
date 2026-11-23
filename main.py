@@ -88,11 +88,14 @@ def main(argv):
         hw = Hardware(cfg)
 
     ctx = actions.Context(hw, cfg)
-    print("Mise '{}', strana {}, limit {} s".format(name, cfg["side"], cfg["time_limit_s"]))
+    limit = cfg.get("time_limit_s") or 0
+    print("Mise '{}', strana {}, {}".format(name, cfg["side"],
+          "limit {} s".format(limit) if limit else "BEZ časového limitu (soutěž: time_limit_s 88)"))
     if cfg.get("start_delay_s") and not mock:
         hw.sleep(cfg["start_delay_s"])
     ctx.t0 = hw.now()
-    hw.set_deadline(ctx.t0 + cfg["time_limit_s"])
+    if limit:
+        hw.set_deadline(ctx.t0 + limit)
     try:
         actions.run_steps(ctx, cfg["missions"][name])
         print("{} HOTOVO".format(ctx.stamp()))

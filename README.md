@@ -44,7 +44,7 @@ Simulace vypíše jednotlivé kroky s časem, plán natočení kostek, pohyby mo
 2. V `mission.json` nastavte `"active_mission"` na misi, kterou chcete spustit, a `"side"` na půlku hřiště (`"left"` / `"right"`).
 3. Spusťte `main.py`.
 
-**Testy bez přepisování `active_mission`:** soubory `t_colour.py`, `t_line.py`, `t_drive.py`, `t_turn.py`, `t_arm.py`, `t_pick.py`, `t_pick4.py`, `t_unload.py` spustí rovnou odpovídající misi `test_…`. Nahrajte je vedle `main.py` a na kostce vyberte v **SD karta** → soubor → **START**.
+**Testy bez přepisování `active_mission`:** soubory `t_colour.py`, `t_line.py`, `t_drive.py`, `t_turn.py`, `t_arm.py`, `t_pick.py`, `t_pick4.py`, `t_unload.py`, `t_curve_a.py` spustí rovnou odpovídající misi `test_…`. Nahrajte je vedle `main.py` a na kostce vyberte v **SD karta** → soubor → **START**.
 
 > **Gyro se kalibruje ručně** programem `kalibrace_gyra.py` před každou jízdou: položte robota, spusťte ho a **nehýbejte s ním**, dokud nepípne (cca 6 s). Vypíše, jestli gyro v klidu neujíždí.
 > Při startu mise se gyro už nerekalibruje (`gyro_reboot_on_start: false`), jen se 1 s měří drift (`gyro_check_s`). Když ujíždí, vypíše `! GYRO UJÍŽDÍ` a 3× hluboce pípne – pak znovu spusťte `kalibrace_gyra.py`.
@@ -65,7 +65,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 ```json
 "side": "left",              // půlka hřiště: left / right
 "active_mission": "main",    // která mise se spustí na robotu
-"time_limit_s": 88,          // po tomto čase robot zastaví (soutěž má 90 s)
+"time_limit_s": 88,          // po tomto čase robot zastaví (soutěž má 90 s); 0 = bez limitu při ladění
 "start_delay_s": 0           // prodleva před startem (jen na robotu)
 ```
 
@@ -99,6 +99,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 | `ramp_s` | doba rozjezdu | |
 | `decel_k` | jak brzy začne brzdit před cílem | větší = brzdí později |
 | `heading_kp` | jak silně drží směr při jízdě rovně | robot kličkuje → snížit |
+| `absolute_heading` | `true` = `turn`/`curve`/`drive` míří na směr počítaný od startu mise, chyby otáček se nesčítají (další jízda je opraví) | robot po otáčkách postupně „ujíždí“ do strany → `true`; když gyro během jízdy hodně driftuje → `false` |
 | `turn_speed`, `turn_min_speed`, `turn_kp`, `turn_tol_deg` | regulace otáčení | přetáčí → snížit `turn_kp` |
 
 **`colour`**: barevný senzor
@@ -116,6 +117,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 - `rot_positions`: polohy otočení v rámci jednoho slotu. Přechod např. z `CCW` do `CW` = rozdíl poloh (−2000°).
 - `transitions`: posuny zásobníku ve tvaru `"ROT,SLOT>ROT,SLOT": stupně` (relativní pohyb). Pro každý stav musí existovat posun do druhého slotu, jinak kontrola souboru nahlásí chybu.
 - `speed`, `shift_speed`: rychlost otáčení kostky / posunu zásobníku.
+- `nudge_deg`: dorovnání zásobníku `{"cmd": "arm", "nudge": true}` (makro `unload` ho dělá před vysunutím kostek). Motor C uvnitř slotu jen otáčí kostkou, proto nejdřív dojede do krajní rotace slotu (RIGHT = `CCW`, LEFT = `CW`) a teprve pak ještě o `nudge_deg` dál – to tlačí zásobník. Jede pevný počet stupňů bez hlídání zablokování; když zásobník pořád nedojede, zvýšit `nudge_deg`, když motor drhne o doraz (`TIMEOUT`), snížit.
 - `extra_wait_s`: rezerva časového limitu pohybu. Když motor C nedojede (zasekne se), zabrzdí se a do logu se vypíše `arm: timeout`.
 
 **`pick`**: nabírání kostek
@@ -132,6 +134,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 | `wait_clear`, `clear_max_mm` | Před hledáním další kostky nejdřív popojet, dokud senzor neuvidí pozadí |
 | `settle_mm` | Popojetí po nalezení kostky před čtením barvy |
 | `advance_mm`, `advance_speed` | Popojetí po otočení kostky (zasunutí do robota) |
+| `advance_extra_mm` | Prodloužení zasunutí pro konkrétní kostku, např. `{ "4": 20 }` = 4. kostka o 20 mm dál |
 | `reads` | Počet čtení barvy (vybere se nejčastější) |
 
 ### 3.4 `macros` – pojmenované sekvence kroků
@@ -157,7 +160,7 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 | `follow_line` | `mm`, [`edge`: left/right], [`speed`], [`kp`], [`target`] | Sledování hrany čáry podle odraženého světla |
 | `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
 | `unload` | [`chain_id`], [`macro`] | Spustí makro `unload` a zapamatuje si položený řetěz |
-| `arm` | [`rot`], [`slot`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. |
+| `arm` | [`rot`], [`slot`], [`nudge`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. `nudge: true` (nebo počet stupňů) dorovná zásobník: dojede do krajní rotace slotu a ještě o `arm.nudge_deg` dál. |
 | `arm_home` | – | Vrátí motor C do stavu `initial` |
 | `macro` | `name` | Spustí makro |
 | `wait` | `s` | Čekání |
@@ -197,7 +200,8 @@ Každý krok ladí jednu věc. Po každém testu upravte jen čísla v `mission.
 | 6 | `test_pick` | Dvě kostky z horní řady: najde je, správně otočí | `pick.seen_to_front`, `advance_mm`, `approach_speed` |
 | 7 | `test_pick4` | Všechny 4 kostky včetně posunu zásobníku | `pick.shift_after`, `clear_max_mm` |
 | 8 | `test_unload` | Kostky leží v řadě těsně za sebou (mezera ≤ 5 mm) | makro `unload`, `pick.physical_order` |
-| 9 | `main` | Celá jízda | trasa v misi `main` |
+| 9 | `test_curve_a` | Zatáčka po levé řadě: zásobník nedrhne o stěnu (start jako po nabrání 4. kostky, u stěny, míří dolů) | makro `curve_a` (`inner`/`outer`, couvání před zatáčkou) |
+| 10 | `main` | Celá jízda | trasa v misi `main` |
 
 **Tip:** Vložte do mise `{"cmd": "beep"}` mezi kroky. Podle pípnutí poznáte, kde robot právě je.
 
