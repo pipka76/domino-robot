@@ -227,10 +227,21 @@ def cmd_drive(ctx, st):
 
 
 def cmd_drive_time(ctx, st):
+    """Jízda daný čas bez držení směru. Se "square": true slouží k dorovnání o stěnu:
+    robot se dotlačí ke stěně, počká settle_s a aktuální směr gyra vezme jako přesný
+    (při drive.absolute_heading se od něj počítají další otáčky)."""
     v = st.get("speed", ctx.drive["speed"])
     ctx.hw.drive_speed(v, v)
     ctx.hw.sleep(st["s"])
     ctx.hw.stop()
+    if st.get("square"):
+        ctx.hw.sleep(st.get("settle_s", 0.2))
+        g = ctx.hw.gyro_angle()
+        if g is not None:
+            old = ctx.heading
+            set_heading(ctx, g)
+            ctx.log("    dorovnáno o stěnu: gyro {:+.1f}{}".format(
+                g, "" if old is None else ", cílový směr byl {:+.1f} (oprava {:+.1f})".format(old, g - old)))
 
 
 def cmd_turn(ctx, st):
@@ -360,32 +371,51 @@ def cmd_pick_row(ctx, st):
     ctx.hw.mock_blocks(pairs[1:] if prep is not None else pairs, spacing)
 
     bg = _colour_set(ctx, "background")
+    # rychlosti lze přepsat v kroku pick_row (např. jen pro jednu řadu)
+    approach_v = st.get("approach_speed", pk["approach_speed"])
+    advance_v = st.get("advance_speed", pk.get("advance_speed"))
+    # pick.shift_at_next: zásobník se posune až u další kostky (robot tam stejně zastaví),
+    # takže kostka před posunem má víc času dojet a nepřibude další brzdění
+    shift_next = st.get("shift_at_next", pk.get("shift_at_next", False))
+    pending = False
     picked = 0
     for i, (front, rear) in enumerate(plan["orient"]):
         if i == 0 and prep is not None:
             ctx.log("  {} kostka 1: nabraná zatáčkou, rameno připraveno {} (front={}), senzor teď vidí {}".format(
                 ctx.stamp(), ctx.mech.rot, front, ctx.hw.colour()))
-            drive_mm(ctx, advance_len(ctx, picked + 1, st.get("first_advance_mm", pk["advance_mm"])), pk.get("advance_speed"))
+            drive_mm(ctx, advance_len(ctx, picked + 1, st.get("first_advance_mm", pk["advance_mm"])), advance_v)
             picked += 1
             if picked in pk["shift_after"]:
-                shift_magazine(ctx)
+                if shift_next:
+                    pending = True
+                else:
+                    shift_magazine(ctx)
             continue
         if i > 0 and pk.get("wait_clear", True):
-            drive_mm(ctx, pk.get("clear_max_mm", 80), pk["approach_speed"], until=until_colour(ctx, want=bg))
+            drive_mm(ctx, pk.get("clear_max_mm", 80), approach_v, until=until_colour(ctx, want=bg))
         max_mm = pk["first_max_mm"] if i == 0 else spacing + pk.get("gap_margin_mm", 100)
-        if not drive_mm(ctx, max_mm, pk["approach_speed"], until=until_colour(ctx, avoid=bg)):
+        if not drive_mm(ctx, max_mm, approach_v, until=until_colour(ctx, avoid=bg)):
             ctx.log("    ! kostka {} nenalezena".format(i + 1))
             break
         if pk.get("settle_mm"):
-            drive_mm(ctx, pk["settle_mm"], pk["approach_speed"])
+            drive_mm(ctx, pk["settle_mm"], approach_v)
+        if pending:
+            ctx.log("    posun zásobníku až u kostky {}".format(i + 1))
+            shift_magazine(ctx)
+            pending = False
         seen = read_colour(ctx, pk.get("reads", 5))
         rot = choose_rot(ctx, seen, front, rear)
         ctx.log("  {} kostka {}: vidím {} -> {} (front={})".format(ctx.stamp(), i + 1, seen, rot, front))
         ctx.mech.goto(rot=rot)
-        drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"]), pk.get("advance_speed"))
+        drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"]), advance_v)
         picked += 1
         if picked in pk["shift_after"]:
-            shift_magazine(ctx)
+            if shift_next:
+                pending = True
+            else:
+                shift_magazine(ctx)
+    if pending:
+        shift_magazine(ctx)  # další kostka nebyla, posunout aspoň na konci
     ctx.loaded = {"chain_id": st.get("chain_id"), "plan": plan, "count": picked,
                   "append_to": st.get("append_to"), "join_end": st.get("join_end", "front")}
 

@@ -156,7 +156,7 @@ class Hardware:
         """Relativní pohyb motoru C, čeká na dokončení (s timeoutem).
         Zablokování = enkodér se za arm.stall_s neposunul aspoň o 10 deg.
         (is_stalled() z Brian API hlásí zablokování i při normálním těžkém posunu zásobníku.)
-        stall_s=0 = hlídání zablokování vypnuté (jen timeout)."""
+        stall_s=0 = hlídání zablokování vypnuté (jen timeout). Vrací skutečně ujeté stupně."""
         self.check_time()
         est_s = abs(deg) / max(abs(speed), 1)
         t0 = _now()
@@ -179,12 +179,13 @@ class Hardware:
                 self.arm.brake()  # při timeoutu se motor sám nezastaví
                 self.log("    arm: {} (cíl {:+} deg, ujel {:+} deg za {:.1f} s)".format(
                     "ZABLOKOVÁNO" if stalled else "TIMEOUT", deg, int(a - start), now - t0))
-                return
+                return int(self.arm.current_angle() - start)
             self.check_time()
             time.sleep(0.01)
         dt = _now() - t0
         self.log("    arm ok: {:+} deg za {:.2f} s (průměr {:.0f} deg/s, nastaveno {})".format(
             deg, dt, abs(deg) / max(dt, 0.001), speed))
+        return int(self.arm.current_angle() - start)
 
     # --- ostatní ---
     def beep(self, hz=880, ms=150):

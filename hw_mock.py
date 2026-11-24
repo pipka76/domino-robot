@@ -98,6 +98,7 @@ class MockHardware:
     def arm_move(self, deg, speed, tol=15, stall_s=None, extra_wait_s=None):
         self.arm_total += abs(deg)
         self.sleep(abs(deg) / float(speed) + 0.1)
+        return deg
 
     def beep(self, hz=880, ms=150):
         self.log("    [mock] beep {} Hz {} ms".format(hz, ms))

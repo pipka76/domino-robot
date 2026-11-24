@@ -44,7 +44,7 @@ Simulace vypíše jednotlivé kroky s časem, plán natočení kostek, pohyby mo
 2. V `mission.json` nastavte `"active_mission"` na misi, kterou chcete spustit, a `"side"` na půlku hřiště (`"left"` / `"right"`).
 3. Spusťte `main.py`.
 
-**Testy bez přepisování `active_mission`:** soubory `t_colour.py`, `t_line.py`, `t_drive.py`, `t_turn.py`, `t_arm.py`, `t_pick.py`, `t_pick4.py`, `t_unload.py`, `t_curve_a.py` spustí rovnou odpovídající misi `test_…`. Nahrajte je vedle `main.py` a na kostce vyberte v **SD karta** → soubor → **START**.
+**Testy bez přepisování `active_mission`:** soubory `t_colour.py`, `t_line.py`, `t_drive.py`, `t_turn.py`, `t_arm.py`, `t_pick.py`, `t_pick4.py`, `t_unload.py`, `t_curve_a.py`, `t_bottom.py` spustí rovnou odpovídající misi `test_…`. Nahrajte je vedle `main.py` a na kostce vyberte v **SD karta** → soubor → **START**.
 
 > **Gyro se kalibruje ručně** programem `kalibrace_gyra.py` před každou jízdou: položte robota, spusťte ho a **nehýbejte s ním**, dokud nepípne (cca 6 s). Vypíše, jestli gyro v klidu neujíždí.
 > Při startu mise se gyro už nerekalibruje (`gyro_reboot_on_start: false`), jen se 1 s měří drift (`gyro_check_s`). Když ujíždí, vypíše `! GYRO UJÍŽDÍ` a 3× hluboce pípne – pak znovu spusťte `kalibrace_gyra.py`.
@@ -135,6 +135,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 | `settle_mm` | Popojetí po nalezení kostky před čtením barvy |
 | `advance_mm`, `advance_speed` | Popojetí po otočení kostky (zasunutí do robota) |
 | `advance_extra_mm` | Prodloužení zasunutí pro konkrétní kostku, např. `{ "4": 20 }` = 4. kostka o 20 mm dál |
+| `shift_at_next` | `true` = posun zásobníku až u další kostky (robot tam stejně stojí), ne hned po zasunutí |
 | `reads` | Počet čtení barvy (vybere se nejčastější) |
 
 ### 3.4 `macros` – pojmenované sekvence kroků
@@ -152,13 +153,13 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 | `cmd` | Parametry | Co dělá |
 |---|---|---|
 | `drive` | `mm`, [`speed`], [`hold`] | Jízda rovně (záporné `mm` = couvání). `hold: false` vypne držení směru gyrem. |
-| `drive_time` | `s`, [`speed`] | Jízda daný čas (nouzová varianta jako v `sample.py`) |
+| `drive_time` | `s`, [`speed`], [`square`], [`settle_s`] | Jízda daný čas bez držení směru. `square: true` = dorovnání o stěnu: po dotlačení vezme aktuální směr gyra jako přesný (pro `absolute_heading`). Couvání = záporná `speed`. |
 | `turn` | `deg`, [`speed`] | Otočení na místě, kladně = doleva |
 | `curve` | `deg`, [`inner`], [`outer`], [`s_per_90`], [`gyro`] | Zatáčka po oblouku (vnitřní kolo pomalu, vnější rychle), kladně = doleva. S gyrem zastaví na úhlu, jinak podle času. Výchozí hodnoty `drive.curve_*`. |
 | `pick_prepare` | `row` + stejné parametry jako `pick_row`, [`seen`], [`rot`] | Naplánuje řadu a předem natočí rameno pro 1. kostku, kterou nabere zatáčka (barva se bere z `layouts`, polovinu viděnou senzorem určuje `pick.seen_half`). |
 | `drive_until_colour` | `colour` **nebo** `not`, [`max_mm`], [`speed`], [`reverse`], [`debounce`] | Jede, dokud neuvidí barvu `colour` / dokud neuvidí něco jiného než `not`. Hodnoty: název barvy, seznam barev, `"line"` nebo `"background"`. |
 | `follow_line` | `mm`, [`edge`: left/right], [`speed`], [`kp`], [`target`] | Sledování hrany čáry podle odraženého světla |
-| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
+| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`], [`approach_speed`], [`advance_speed`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
 | `unload` | [`chain_id`], [`macro`] | Spustí makro `unload` a zapamatuje si položený řetěz |
 | `arm` | [`rot`], [`slot`], [`nudge`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. `nudge: true` (nebo počet stupňů) dorovná zásobník: dojede do krajní rotace slotu a ještě o `arm.nudge_deg` dál. |
 | `arm_home` | – | Vrátí motor C do stavu `initial` |
@@ -200,7 +201,8 @@ Každý krok ladí jednu věc. Po každém testu upravte jen čísla v `mission.
 | 6 | `test_pick` | Dvě kostky z horní řady: najde je, správně otočí | `pick.seen_to_front`, `advance_mm`, `approach_speed` |
 | 7 | `test_pick4` | Všechny 4 kostky včetně posunu zásobníku | `pick.shift_after`, `clear_max_mm` |
 | 8 | `test_unload` | Kostky leží v řadě těsně za sebou (mezera ≤ 5 mm) | makro `unload`, `pick.physical_order` |
-| 9 | `test_curve_a` | Zatáčka po levé řadě: zásobník nedrhne o stěnu (start jako po nabrání 4. kostky, u stěny, míří dolů) | makro `curve_a` (`inner`/`outer`, couvání před zatáčkou) |
+| 9 | `test_bottom` | Najetí na spodní řadu (couvnutí zásobníkem k levé stěně) a její nabrání; start jako po vykládce A, míří nahoru | makro `to_bottom`, `curve` u `test_bottom` |
+| 9b | `test_curve_a` | Zatáčka po levé řadě: zásobník nedrhne o stěnu (start jako po nabrání 4. kostky, u stěny, míří dolů) | makro `curve_a` (`inner`/`outer`, couvání před zatáčkou) |
 | 10 | `main` | Celá jízda | trasa v misi `main` |
 
 **Tip:** Vložte do mise `{"cmd": "beep"}` mezi kroky. Podle pípnutí poznáte, kde robot právě je.
