@@ -5,6 +5,7 @@ z rozdílu kol, barevný senzor vidí kostky rozmístěné po `spacing_mm`.
 S `--flip` jsou kostky náhodně otočené o 180° (simulace 2. kola).
 """
 import random
+import time
 
 from common import TimeUp
 
@@ -12,7 +13,7 @@ DT_MAX = 0.05
 
 
 class MockHardware:
-    def __init__(self, cfg, log=print, flip=False, seed=1):
+    def __init__(self, cfg, log=print, flip=False, seed=1, realtime=False):
         self.log = log
         d = cfg["robot"]["drive"]
         self.deg_per_mm = d["deg_per_mm"]
@@ -31,6 +32,7 @@ class MockHardware:
         self.next_at = None
         self.spacing = 0
         self.arm_total = 0.0
+        self.realtime = realtime  # --realtime: běží stejně rychle jako robot (sleep i ve skutečnosti)
 
     # --- čas ---
     def now(self):
@@ -45,6 +47,8 @@ class MockHardware:
 
     def sleep(self, s):
         self.check_time()
+        if self.realtime:
+            time.sleep(s)
         while s > 1e-9:
             dt = min(s, DT_MAX)
             self.l += self.vl * dt

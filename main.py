@@ -1,5 +1,5 @@
 """Vstupní bod. Na robotu: spustit main.py (mise podle `active_mission`).
-Na PC:  python3 main.py --mock [název_mise] [--flip] [--side left|right]
+Na PC:  python3 main.py --mock [název_mise] [--flip] [--side left|right] [--realtime]
 """
 import json
 import sys
@@ -82,7 +82,7 @@ def main(argv):
 
     if mock:
         from hw_mock import MockHardware
-        hw = MockHardware(cfg, flip="--flip" in flags)
+        hw = MockHardware(cfg, flip="--flip" in flags, realtime="--realtime" in flags)
     else:
         from hw import Hardware
         hw = Hardware(cfg)

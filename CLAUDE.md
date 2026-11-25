@@ -13,7 +13,7 @@ Uživatel (Metoděj) ladí na reálném robotu a posílá výpisy z konzole; kom
 ```bash
 python3 planner.py                 # ověří, že z každé řady jde složit řetěz
 python3 main.py --mock             # simulace active_mission (virtuální čas, „Celkový čas“ na konci)
-python3 main.py --mock test_bottom # konkrétní mise; --flip = kostky otočené o 180°; --side right
+python3 main.py --mock test_bottom # konkrétní mise; --flip = kostky otočené o 180°; --side right; --realtime
 ```
 Po každé změně kódu/JSONu spustit aspoň `python3 main.py --mock` (validace + čas mise) a u dotčených
 testů i jejich misi. Simulace NEověřuje fyziku (mock vidí polovinu kostky s indexem 0, odražené světlo

@@ -34,6 +34,7 @@ python3 main.py --mock                   # simulace mise z active_mission
 python3 main.py --mock test_arm          # simulace konkrétní mise
 python3 main.py --mock --flip            # kostky náhodně otočené o 180° (2. kolo)
 python3 main.py --mock --side right      # simulace pro pravou půlku hřiště
+python3 main.py --mock --realtime        # simulace v reálném čase (výpis běží stejně rychle jako robot)
 ```
 
 Simulace vypíše jednotlivé kroky s časem, plán natočení kostek, pohyby motoru C a celkový čas. Hodí se ke kontrole, že je JSON v pořádku a že se mise vejde do časového limitu. Rychlosti v simulaci jsou jen přibližné.
