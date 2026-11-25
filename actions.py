@@ -59,9 +59,12 @@ def set_heading(ctx, target):
         ctx.heading = target
 
 
-def drive_mm(ctx, mm, speed=None, until=None, hold=True):
+def drive_mm(ctx, mm, speed=None, until=None, hold=True, overrun_mm=0, tail_s=0, tail_speed=None):
     """Jízda rovně o mm (enkodéry) s rampou, dobrzděním a držením směru gyrem.
-    until: funkce bez parametrů -> True = zastavit. Vrací True, když zastavil `until`."""
+    until: funkce bez parametrů -> True = zastavit. Vrací True, když zastavil `until`.
+    overrun_mm: po splnění `until` jet ještě tolik mm v jednom kuse (bez zastavení navíc).
+    tail_s, tail_speed: po ujetí mm nezastavit, zpomalit na tail_speed a jet ještě tail_s s
+    (bez držení směru) – např. dotlačení ke stěně v jedné jízdě."""
     hw, d = ctx.hw, ctx.drive
     speed = speed or d["speed"]
     vmin = d.get("min_speed", 100)
@@ -80,14 +83,19 @@ def drive_mm(ctx, mm, speed=None, until=None, hold=True):
             break
         if until is not None and until():
             hit = True
+            if overrun_mm > 0:
+                target = done + overrun_mm * d["deg_per_mm"]
+                until = None  # dál už na vzdálenost, s dobrzděním
+                continue
             break
         if hw.now() - t0 > timeout:
             ctx.log("    drive: timeout")
             break
         t = hw.now() - t0
         v = vmin + (speed - vmin) * min(1.0, t / max(d.get("ramp_s", 0.3), 0.01))
-        if until is None:  # dobrzdění jen u jízdy na vzdálenost
-            v = min(v, max(vmin, (target - done) * d.get("decel_k", 3.0)))
+        if until is None:  # dobrzdění jen u jízdy na vzdálenost (s tail jen na tail_speed)
+            v_end = abs(tail_speed) if tail_s and tail_speed else vmin
+            v = min(v, max(v_end, (target - done) * d.get("decel_k", 3.0)))
         corr = 0.0
         if h0 is not None:
             herr = hw.gyro_angle() - h0
@@ -95,6 +103,10 @@ def drive_mm(ctx, mm, speed=None, until=None, hold=True):
             corr = clamp(herr * d.get("heading_kp", 4.0) + integ * d.get("heading_ki", 0.0), -v / 2, v / 2)
         hw.drive_speed(sign * v + corr, sign * v - corr)
         hw.sleep(d.get("dt", 0.01))
+    if tail_s and not hit and done >= target:
+        v = abs(tail_speed or vmin)
+        hw.drive_speed(sign * v, sign * v)
+        hw.sleep(tail_s)
     hw.stop()
     l, r = hw.wheel_angles()
     wheels = "kola L={:+.0f} P={:+.0f} deg".format(l, r)
@@ -246,7 +258,8 @@ def read_colour(ctx, reads):
 # ---------------------------------------------------------------- příkazy
 
 def cmd_drive(ctx, st):
-    drive_mm(ctx, st["mm"], st.get("speed"), hold=st.get("hold", True))
+    drive_mm(ctx, st["mm"], st.get("speed"), hold=st.get("hold", True),
+             tail_s=st.get("tail_s", 0), tail_speed=st.get("tail_speed"))
 
 
 def cmd_drive_time(ctx, st):
@@ -347,12 +360,13 @@ def advance_len(ctx, picked_after, base):
     return mm
 
 
-def shift_magazine(ctx, extra=0):
+def shift_magazine(ctx, extra=0, wait=None):
     """Posun zásobníku během nabírání (kostku před tím dotlačí delší advance, viz advance_len).
     extra = stupně navíc k posunu (pick_row "shift_extra", např. jen pro řadu B)."""
     pk = ctx.pick
-    if pk.get("shift_wait_s"):
-        ctx.hw.sleep(pk["shift_wait_s"])
+    wait = pk.get("shift_wait_s", 0) if wait is None else wait
+    if wait:
+        ctx.hw.sleep(wait)
     ctx.mech.goto(slot="toggle", extra=extra)
 
 
@@ -403,6 +417,7 @@ def cmd_pick_row(ctx, st):
     shift_next = st.get("shift_at_next", pk.get("shift_at_next", False))
     pending = False
     shift_extra = st.get("shift_extra", 0)
+    shift_wait = st.get("shift_wait_s")  # None = pick.shift_wait_s
     picked = 0
     for i, (front, rear) in enumerate(plan["orient"]):
         if i == 0 and prep is not None:
@@ -414,19 +429,22 @@ def cmd_pick_row(ctx, st):
                 if shift_next:
                     pending = True
                 else:
-                    shift_magazine(ctx, shift_extra)
+                    shift_magazine(ctx, shift_extra, shift_wait)
             continue
         if i > 0 and pk.get("wait_clear", True):
             drive_mm(ctx, pk.get("clear_max_mm", 80), approach_v, until=until_block(ctx, present=False))
         max_mm = pk["first_max_mm"] if i == 0 else spacing + pk.get("gap_margin_mm", 100)
-        if not drive_mm(ctx, max_mm, approach_v, until=until_block(ctx, present=True)):
+        # před posunem zásobníku (shift_at_next) dojet kousek za kostku, ať předchozí kostka
+        # dojede na konec zásobníku – v jednom kuse s hledáním, bez zastavení navíc
+        over = st.get("shift_overrun_mm", 0) if pending else 0
+        if not drive_mm(ctx, max_mm, approach_v, until=until_block(ctx, present=True), overrun_mm=over):
             ctx.log("    ! kostka {} nenalezena".format(i + 1))
             break
         if pk.get("settle_mm"):
             drive_mm(ctx, pk["settle_mm"], approach_v)
         if pending:
             ctx.log("    posun zásobníku až u kostky {}".format(i + 1))
-            shift_magazine(ctx, shift_extra)
+            shift_magazine(ctx, shift_extra, shift_wait)
             pending = False
         if st.get("ignore_colours"):
             # barvy se nečtou, ruce zůstávají, jak jsou (méně pohybů motoru C)
@@ -442,9 +460,9 @@ def cmd_pick_row(ctx, st):
             if shift_next:
                 pending = True
             else:
-                shift_magazine(ctx, shift_extra)
+                shift_magazine(ctx, shift_extra, shift_wait)
     if pending:
-        shift_magazine(ctx, shift_extra)  # další kostka nebyla, posunout aspoň na konci
+        shift_magazine(ctx, shift_extra, shift_wait)  # další kostka nebyla, posunout aspoň na konci
     ctx.loaded = {"chain_id": st.get("chain_id"), "plan": plan, "count": picked,
                   "append_to": st.get("append_to"), "join_end": st.get("join_end", "front")}
 

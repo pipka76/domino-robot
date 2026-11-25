@@ -152,14 +152,14 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 
 | `cmd` | Parametry | Co dělá |
 |---|---|---|
-| `drive` | `mm`, [`speed`], [`hold`] | Jízda rovně (záporné `mm` = couvání). `hold: false` vypne držení směru gyrem. |
+| `drive` | `mm`, [`speed`], [`hold`], [`tail_s`], [`tail_speed`] | Jízda rovně (záporné `mm` = couvání). `hold: false` vypne držení směru gyrem. `tail_s`/`tail_speed`: po ujetí `mm` nezastaví, zpomalí a jede ještě `tail_s` s (dotlačení ke stěně v jedné jízdě). |
 | `drive_time` | `s`, [`speed`], [`square`], [`settle_s`] | Jízda daný čas bez držení směru. `square: true` = dorovnání o stěnu: po dotlačení vezme aktuální směr gyra jako přesný (pro `absolute_heading`). Couvání = záporná `speed`. |
 | `turn` | `deg`, [`speed`] | Otočení na místě, kladně = doleva |
 | `curve` | `deg`, [`inner`], [`outer`], [`s_per_90`], [`gyro`] | Zatáčka po oblouku (vnitřní kolo pomalu, vnější rychle), kladně = doleva. S gyrem zastaví na úhlu, jinak podle času. Výchozí hodnoty `drive.curve_*`. |
 | `pick_prepare` | `row` + stejné parametry jako `pick_row`, [`seen`], [`rot`] | Naplánuje řadu a předem natočí rameno pro 1. kostku, kterou nabere zatáčka (barva se bere z `layouts`, polovinu viděnou senzorem určuje `pick.seen_half`). |
 | `drive_until_colour` | `colour` **nebo** `not`, [`max_mm`], [`speed`], [`reverse`], [`debounce`] | Jede, dokud neuvidí barvu `colour` / dokud neuvidí něco jiného než `not`. Hodnoty: název barvy, seznam barev, `"line"` nebo `"background"`. |
 | `follow_line` | `mm`, [`edge`: left/right], [`speed`], [`kp`], [`target`] | Sledování hrany čáry podle odraženého světla |
-| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`], [`approach_speed`], [`advance_speed`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
+| `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`], [`approach_speed`], [`advance_speed`], [`ignore_colours`], [`shift_extra`], [`shift_wait_s`], [`shift_overrun_mm`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
 | `unload` | [`chain_id`], [`macro`] | Spustí makro `unload` a zapamatuje si položený řetěz |
 | `arm` | [`rot`], [`slot`], [`nudge`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. `nudge: true` (nebo počet stupňů) dorovná zásobník: dojede do krajní rotace slotu a ještě o `arm.nudge_deg` dál. |
 | `arm_home` | – | Vrátí motor C do stavu `initial` |
