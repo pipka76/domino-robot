@@ -1,0 +1,12 @@
+{
+  "comment": "Earlier compact concept: narrow 100 mm body between wheels sticking out to 200 mm.",
+  "length": 210,
+  "width": 202,
+  "bodyWidth": 100,
+  "axleFromFront": 110,
+  "wheelDiameter": 56,
+  "wheelWidth": 16,
+  "groundClearance": 30,
+  "laneHalfWidth": 50,
+  "sensorAhead": 50
+}

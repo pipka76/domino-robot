@@ -1,0 +1,38 @@
+{
+  "comment": "Left half of VARIANTA_FINAL (Robosoutez 2026 Domino). Units mm. Origin = inner top-left corner, x to the right, z down (image y). Piece colors: first letter = end at -axis (top for axis z, left for axis x). Yellow rect estimated from figure - adjust if needed.",
+  "field": {
+	"width": 1250,
+	"depth": 1680,
+	"wallHeight": 75,
+	"lineWidth": 20,
+	"stubLength": 100,
+	"blackRect": [280, 280, 980, 1400],
+	"blackCrossX": 620,
+	"blackCrossZ": 840,
+	"yellowRect": [400, 420, 840, 1260],
+	"yellowLineWidth": 20
+  },
+  "robotStart": { "x": 160, "z": 132, "heading": 0, "comment": "top-left corner, on the top-row line, facing along the row" },
+  "lines": [
+	{ "name": "top", "pieces": [
+	  { "x": 320, "z": 132, "axis": "z", "colors": "BR" },
+	  { "x": 520, "z": 132, "axis": "z", "colors": "RG" },
+	  { "x": 720, "z": 132, "axis": "z", "colors": "GY" },
+	  { "x": 920, "z": 132, "axis": "z", "colors": "YY" } ] },
+	{ "name": "bottom", "pieces": [
+	  { "x": 320, "z": 1548, "axis": "z", "colors": "BR" },
+	  { "x": 520, "z": 1548, "axis": "z", "colors": "RR" },
+	  { "x": 720, "z": 1548, "axis": "z", "colors": "RY" },
+	  { "x": 920, "z": 1548, "axis": "z", "colors": "YB" } ] },
+	{ "name": "left", "pieces": [
+	  { "x": 132, "z": 420, "axis": "x", "colors": "GB" },
+	  { "x": 132, "z": 700, "axis": "x", "colors": "GG" },
+	  { "x": 132, "z": 980, "axis": "x", "colors": "BG" },
+	  { "x": 132, "z": 1260, "axis": "x", "colors": "BB" } ] },
+	{ "name": "right", "pieces": [
+	  { "x": 1128, "z": 420, "axis": "x", "colors": "GY" },
+	  { "x": 1128, "z": 700, "axis": "x", "colors": "RG" },
+	  { "x": 1128, "z": 980, "axis": "x", "colors": "YR" },
+	  { "x": 1128, "z": 1260, "axis": "x", "colors": "BY" } ] }
+  ]
+}

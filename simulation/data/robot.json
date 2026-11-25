@@ -1,0 +1,12 @@
+{
+  "comment": "Robot geometry in mm. Robot frame: x forward, origin on the wheel axle centre. length/width = outer footprint incl. wheels (wheels at the outer width). cornerRadius rounds the base outline. sensorAhead = colour sensors' distance in front of the front edge.",
+  "length": 280,
+  "width": 200,
+  "axleFromFront": 140,
+  "wheelDiameter": 56,
+  "wheelWidth": 16,
+  "groundClearance": 30,
+  "laneHalfWidth": 50,
+  "cornerRadius": 50,
+  "sensorAhead": 20
+}
