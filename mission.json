@@ -129,10 +129,10 @@
       { "_": "Z místa vykládky A (robot míří nahoru) k levému dolnímu rohu: srovnat se zadkem o levou stěnu, pak dolů ke spodní řadě." },
       { "cmd": "turn", "deg": -90, "_": "míří doprava, zadek k levé stěně" },
       { "cmd": "drive", "mm": -450, "_doladit": "rychle couvnout skoro ke stěně (zbytek dojede pomalu); když narazí už tady, zkrátit" },
-      { "cmd": "drive_time", "s": 1.5, "speed": -250, "square": true, "_doladit": "pomalu dotlačit zásobník ke stěně -> přesný směr a osa kol 190 mm od stěny" },
+      { "cmd": "drive_time", "s": 1.5, "speed": -250, "_doladit": "pomalu dotlačit zásobník ke stěně -> osa kol 190 mm od stěny. Reset směru gyra (\"square\": true) zrušen." },
       { "cmd": "drive", "mm": 10, "_doladit": "odlepit zadek od zdi, aby při otočce nedrhl (zadní pravý roh jde ~2 mm ke zdi)" },
       { "cmd": "curve", "deg": -90, "inner": 0, "outer": 300, "s_per_90": 1.8, "_": "otočka dolů kolem PRAVÉHO kola (stojí): osa kol skončí ~81 mm níž a ~120 mm od levé stěny, pravý bok skoro u zdi" },
-      { "cmd": "drive", "mm": 135, "_doladit": "85 fungovalo, +50 protože vykládka A je o 5 cm výš (drive 500 místo 450) – srovnání o zeď je pak taky výš. Dolů na start zatáčky: osa kol ~275 mm od spodní stěny (po srovnání ~440, po otočce ~360). Předek je u zdi vlevo od 1. kostky, nesmí do ní drcnout." }
+      { "cmd": "drive", "mm": 175, "_doladit": "125 fungovalo, +50 protože vykládka A je o dalších 5 cm výš (drive 550). 135 bylo trochu moc dlouho dolů -> 125. Původně 85 fungovalo, +50 protože vykládka A je o 5 cm výš (drive 500 místo 450) – srovnání o zeď je pak taky výš. Dolů na start zatáčky: osa kol ~275 mm od spodní stěny (po srovnání ~440, po otočce ~360). Předek je u zdi vlevo od 1. kostky, nesmí do ní drcnout." }
     ],
     "curve_b": [
       { "_": "Zatáčka těsně u levé stěny na spodní řadu: robot míří dolů (osa ~120 mm od levé stěny), oblouk R ~160 mm skončí na řadě (osa ~115 mm od spodní stěny) čelem ke 2. kostce; 1. kostku přejede předkem (nabere ji)." },
@@ -142,7 +142,7 @@
       { "_": "Po řadě B (míří doprava u spodní stěny) k vykládce B vlevo od A. BEZ couvání – při couvání vyjíždějí kostky ze zásobníku." },
       { "cmd": "drive", "mm": -40, "_doladit": "couvnout max. 40 mm, víc nejde – vyjíždějí kostky" },
       { "cmd": "turn", "deg": 180, "_doladit": "otočka na místě (dřív oblouk 180° – narážel do přepážky)" },
-      { "cmd": "drive", "mm": 400, "_doladit": "doleva podél prázdné řady B, až je robot vlevo od řady A (aby do ní při jízdě nahoru nenarazil)" },
+      { "cmd": "drive", "mm": 430, "_doladit": "bylo 400, B o pár cm víc vlevo. Doleva podél prázdné řady B, až je robot vlevo od řady A (aby do ní při jízdě nahoru nenarazil)" },
       { "cmd": "turn", "deg": -90, "_": "míří nahoru" },
       { "cmd": "drive", "mm": 620, "_doladit": "nahoru na místo vykládky B (rovnoběžně s A); bylo 300 po oblouku, otočka na místě je o ~32 cm níž" }
     ],
@@ -174,7 +174,7 @@
       { "_": "Jízda do středu k levému hornímu rohu žlutého pole – DOLADIT vzdálenosti a natočení tak, aby kostky padaly shora dolů." },
       { "cmd": "drive", "mm": 460, "_doladit": "po zatáčce míří doprava; bylo 500, -40 mm protože větší oblouk skončí víc vpravo" },
       { "cmd": "turn", "deg": 90, "_": "teď míří nahoru" },
-      { "cmd": "drive", "mm": 500, "_doladit": "nahoru, kde se vyloží A (bylo 450, pak o 5 cm výš)" },
+      { "cmd": "drive", "mm": 550, "_doladit": "nahoru, kde se vyloží A (bylo 450, 500, teď o dalších 5 cm výš)" },
       { "cmd": "unload", "chain_id": "A" },
 
       { "_": "=== 2. JÍZDA: spodní řada zleva doprava -> napojit na řetěz A ===" },
