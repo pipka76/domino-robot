@@ -92,7 +92,10 @@ class MockHardware:
         return "WHITE"
 
     def reflected(self):
-        return self.mock_cfg.get("reflected", 50)
+        """Kostka u senzoru = jasná, podlaha = tmavá (jako reálný senzor ve výšce kostky)."""
+        if self.colour() != "WHITE":
+            return self.mock_cfg.get("reflected_block", 40)
+        return self.mock_cfg.get("reflected", 17)
 
     # --- motor C ---
     def arm_move(self, deg, speed, tol=15, stall_s=None, extra_wait_s=None):

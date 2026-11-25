@@ -167,7 +167,7 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 | `wait` | `s` | Čekání |
 | `beep` | [`hz`=880], [`ms`=150], [`wait`] | Pípnutí. `wait: true` počká, než tón dohraje. |
 | `log` | `msg` | Vypíše text |
-| `print_colour` | [`seconds`], [`period`], [`reflected`] | Vypisuje barvu (a odražené světlo) – kalibrace senzoru |
+| `print_colour` | [`seconds`], [`period`], [`reflected`] | Vypisuje barvu (a odražené světlo) – kalibrace senzoru; `t_line.py` vypisuje obojí (měření pro `colour.floor_reflected`: rozsah odraženého světla podlahy, mimo něj = kostka) |
 
 ### `pick_row` podrobně
 

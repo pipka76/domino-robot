@@ -68,8 +68,11 @@ class Mechanism:
         extra = self.cfg.get("shift_extra", {}).get(target_slot, 0)
         return deg + (extra if deg >= 0 else -extra)
 
-    def goto(self, rot=None, slot=None):
+    def goto(self, rot=None, slot=None, extra=0):
+        """extra: stupně navíc k posunu zásobníku (ve směru pohybu), např. jen pro jednu řadu."""
         for deg, speed, (r, s) in self.plan(rot, slot):
+            if extra and s != self.slot:
+                deg += extra if deg >= 0 else -extra
             self.log("    arm {:+} deg  {},{} -> {},{}".format(deg, self.rot, self.slot, r, s))
             self.hw.arm_move(deg, speed)
             self.rot, self.slot = r, s

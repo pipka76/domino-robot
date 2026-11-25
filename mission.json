@@ -68,6 +68,8 @@
       "background": ["WHITE", "NONE", "BLACK", "BROWN"],
       "line": "BLACK",
       "debounce_reads": 3,
+      "_floor_reflected": "Hledání kostky podle odraženého světla místo barvy (senzor je ve výšce kostky a bílou podlahu čte jako GREEN). Podlaha = odražené světlo v rozsahu [min, max], kostka mimo něj. Změřeno t_line.py: bílá podlaha ~17, zelená 8, modrá 8, červená 40, žlutá 58. null = podle barvy.",
+      "floor_reflected": [12, 24],
       "line_target": 50,
       "line_kp": 2.0
     },
@@ -80,7 +82,7 @@
       "_nudge": "Dorovnání zásobníku před vysunutím kostek ({\"cmd\": \"arm\", \"nudge\": true}): motor C dojede do krajní rotace slotu (RIGHT = CCW, LEFT = CW) a pak ještě o nudge_deg dál, tím dotlačí zásobník. Když pořád nesrovná, zvýšit nudge_deg.",
       "nudge_deg": 800,
       "_shift_extra": "Korekce posunu zásobníku na vůli mechaniky: stupně navíc pro posun DO daného slotu (přičte se ke všem transitions do toho slotu, ve směru pohybu).",
-      "shift_extra": { "LEFT": 0, "RIGHT": 450 },
+      "shift_extra": { "LEFT": 0, "RIGHT": 600 },
       "initial": { "rot": "CCW", "slot": "RIGHT" },
       "rot_positions": { "CW": -1000, "NONE": 0, "CCW": 1000 },
       "transitions": {
@@ -130,16 +132,19 @@
       { "cmd": "drive_time", "s": 1.5, "speed": -250, "square": true, "_doladit": "pomalu dotlačit zásobník ke stěně -> přesný směr a osa kol 190 mm od stěny" },
       { "cmd": "drive", "mm": 10, "_doladit": "odlepit zadek od zdi, aby při otočce nedrhl (zadní pravý roh jde ~2 mm ke zdi)" },
       { "cmd": "curve", "deg": -90, "inner": 0, "outer": 300, "s_per_90": 1.8, "_": "otočka dolů kolem PRAVÉHO kola (stojí): osa kol skončí ~81 mm níž a ~120 mm od levé stěny, pravý bok skoro u zdi" },
-      { "cmd": "drive", "mm": 85, "_doladit": "85 funguje (95 bylo moc). Dolů na start zatáčky: osa kol ~275 mm od spodní stěny (po srovnání ~440, po otočce ~360). Předek je u zdi vlevo od 1. kostky, nesmí do ní drcnout." }
+      { "cmd": "drive", "mm": 135, "_doladit": "85 fungovalo, +50 protože vykládka A je o 5 cm výš (drive 500 místo 450) – srovnání o zeď je pak taky výš. Dolů na start zatáčky: osa kol ~275 mm od spodní stěny (po srovnání ~440, po otočce ~360). Předek je u zdi vlevo od 1. kostky, nesmí do ní drcnout." }
     ],
     "curve_b": [
       { "_": "Zatáčka těsně u levé stěny na spodní řadu: robot míří dolů (osa ~120 mm od levé stěny), oblouk R ~160 mm skončí na řadě (osa ~115 mm od spodní stěny) čelem ke 2. kostce; 1. kostku přejede předkem (nabere ji)." },
       { "cmd": "curve", "deg": 90, "inner": 165, "outer": 500, "s_per_90": 1.6, "_doladit": "poloměr: víc inner = větší oblouk (skončí níž a víc vpravo), méně = menší. R = 81 * (outer+inner)/(outer-inner)" }
     ],
-    "curve_b_end": [
-      { "_": "Zatáčka po řadě B nahoru ke středu. Jako curve_a, ale víc couvne – oblouk sahá ~16 cm dopředu a s couvnutím 40 mm narazil do přepážky." },
-      { "cmd": "drive", "mm": -100, "_doladit": "couvnutí před obloukem; když pořád narazí do přepážky, víc" },
-      { "cmd": "curve", "deg": 90, "inner": 200, "outer": 600 }
+    "after_b": [
+      { "_": "Po řadě B (míří doprava u spodní stěny) k vykládce B vlevo od A. BEZ couvání – při couvání vyjíždějí kostky ze zásobníku." },
+      { "cmd": "drive", "mm": -40, "_doladit": "couvnout max. 40 mm, víc nejde – vyjíždějí kostky" },
+      { "cmd": "turn", "deg": 180, "_doladit": "otočka na místě (dřív oblouk 180° – narážel do přepážky)" },
+      { "cmd": "drive", "mm": 400, "_doladit": "doleva podél prázdné řady B, až je robot vlevo od řady A (aby do ní při jízdě nahoru nenarazil)" },
+      { "cmd": "turn", "deg": -90, "_": "míří nahoru" },
+      { "cmd": "drive", "mm": 620, "_doladit": "nahoru na místo vykládky B (rovnoběžně s A); bylo 300 po oblouku, otočka na místě je o ~32 cm níž" }
     ],
     "curve_a": [
       { "_": "Zatáčka po levé řadě do středu (mise main i test_curve_a)." },
@@ -169,7 +174,7 @@
       { "_": "Jízda do středu k levému hornímu rohu žlutého pole – DOLADIT vzdálenosti a natočení tak, aby kostky padaly shora dolů." },
       { "cmd": "drive", "mm": 460, "_doladit": "po zatáčce míří doprava; bylo 500, -40 mm protože větší oblouk skončí víc vpravo" },
       { "cmd": "turn", "deg": 90, "_": "teď míří nahoru" },
-      { "cmd": "drive", "mm": 450, "_doladit": "nahoru k hornímu okraji žlutého pole (bylo 400, 1. kostka pořád moc nízko)" },
+      { "cmd": "drive", "mm": 500, "_doladit": "nahoru, kde se vyloží A (bylo 450, pak o 5 cm výš)" },
       { "cmd": "unload", "chain_id": "A" },
 
       { "_": "=== 2. JÍZDA: spodní řada zleva doprava -> napojit na řetěz A ===" },
@@ -177,14 +182,13 @@
       { "cmd": "macro", "name": "to_bottom" },
       { "_": "Rameno se natočí PŘEDEM pro 1. kostku spodní řady (zatáčka ji nabere bez čtení barvy)." },
       { "_": "Napojení do L: B se přiloží PŘEDNÍM koncem k HORNÍMU konci A (= poslední kostka levé řady = A.rear). Senzor je vlevo -> u spodní řady jedoucí doprava vidí horní polovinu (blíž ke středu) = seen 0." },
-      { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "append_to": "A.rear", "join_end": "front", "seen": 0 },
+      { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "rot": "NONE", "_": "ruce nechat jak jsou po vykládce A (NONE) – natočení před zatáčkou to kazilo. Jinak \"rot\": \"CW\"/\"CCW\". Zatím samostatný řetěz (napojení do L: append_to A.rear, join_end front)" },
       { "_": "Zatáčka ke spodní řadě: jede dolů -> doprava podél řady = doleva o 90." },
       { "cmd": "macro", "name": "curve_b" },
-      { "cmd": "pick_row", "row": "bottom", "first_taken": true },
+      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "shift_extra": 300, "_doladit": "shift_extra: posun zásobníku v řadě B byl moc malý -> +300° navíc (jen řada B)" },
       { "_": "Zpět do středu: na konci řady míří doprava -> oblouk doleva nahoru -> nahoru ke středu -> otočit doleva a vyložit zprava doleva k hornímu konci A (tvar L). DOLADIT vzdálenosti." },
-      { "cmd": "macro", "name": "curve_b_end", "_": "robot je u spodní stěny -> couvnout a větší oblouk (jako curve_a), jinak zadkem narazí do zdi" },
-      { "cmd": "drive", "mm": 460, "_doladit": "nahoru ke středu; bylo 500, -40 kvůli většímu oblouku" },
-      { "cmd": "turn", "deg": 90, "_doladit": "robot míří doleva (k A), přední konec B se má dotknout horního konce A" },
+      { "cmd": "macro", "name": "after_b", "_": "oblouk 180°, doleva za řadu A, nahoru – ladí se v makru after_b" },
+      { "_": "Dřív: turn 90 (doleva) + vyložit B do L k A – zatím vypnuto, B jen rovnoběžně." },
       { "cmd": "unload" }
     ],
     "main_v1": [
@@ -202,9 +206,9 @@
       { "cmd": "arm", "rot": "NONE", "_": "rameno jako po vykládce" },
       { "cmd": "macro", "name": "to_bottom" },
       { "cmd": "beep", "hz": 1200, "ms": 600 }, { "cmd": "wait", "s": 1.5, "_": "pauza: zkontrolovat polohu před zatáčkou" },
-      { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "seen": 0 },
+      { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "rot": "NONE" },
       { "cmd": "macro", "name": "curve_b" },
-      { "cmd": "pick_row", "row": "bottom", "first_taken": true }
+      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "shift_extra": 300 }
     ],
     "test_curve_a": [
       { "_": "Zatáčka po levé řadě. Start: robot postavit jako po nabrání 4. kostky levé řady (u stěny, míří dolů), zásobník jako na startu mise (RIGHT, rameno CCW)." },
@@ -233,5 +237,5 @@
     "test_unload": [ { "cmd": "macro", "name": "unload" } ]
   },
 
-  "mock": { "first_block_mm": 120, "block_visible_mm": 40, "reflected": 50 }
+  "mock": { "first_block_mm": 120, "block_visible_mm": 40, "reflected": 17, "reflected_block": 40 }
 }

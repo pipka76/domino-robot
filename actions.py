@@ -206,6 +206,29 @@ def until_colour(ctx, want=None, avoid=None, debounce=None):
     return pred
 
 
+def until_block(ctx, present=True, debounce=None):
+    """Predikát „pod senzorem je kostka“ (present=True) / „už není“ (False).
+    colour.floor_reflected = [min, max]: rozhoduje odražené světlo – podlaha dává hodnoty
+    v tomhle rozsahu, kostka mimo něj (zelená/modrá tmavší, červená/žlutá světlejší).
+    Barvu podlahy senzor plete (bílou čte jako GREEN). Bez nastavení = podle barvy."""
+    floor = ctx.ccfg.get("floor_reflected")
+    if not floor:
+        bg = _colour_set(ctx, "background")
+        return until_colour(ctx, avoid=bg, debounce=debounce) if present else until_colour(ctx, want=bg, debounce=debounce)
+    n = debounce or ctx.ccfg.get("debounce_reads", 3)
+    state = {"hits": 0, "last": None}
+
+    def pred():
+        r = ctx.hw.reflected()
+        state["last"] = r
+        is_block = r < floor[0] or r > floor[1]
+        ok = is_block == present
+        state["hits"] = state["hits"] + 1 if ok else 0
+        return state["hits"] >= n
+    pred.state = state
+    return pred
+
+
 def read_colour(ctx, reads):
     """Několik čtení, vrátí nejčastější barvu mimo pozadí (nebo pozadí)."""
     bg = _colour_set(ctx, "background")
@@ -324,12 +347,13 @@ def advance_len(ctx, picked_after, base):
     return mm
 
 
-def shift_magazine(ctx):
-    """Posun zásobníku během nabírání (kostku před tím dotlačí delší advance, viz advance_len)."""
+def shift_magazine(ctx, extra=0):
+    """Posun zásobníku během nabírání (kostku před tím dotlačí delší advance, viz advance_len).
+    extra = stupně navíc k posunu (pick_row "shift_extra", např. jen pro řadu B)."""
     pk = ctx.pick
     if pk.get("shift_wait_s"):
         ctx.hw.sleep(pk["shift_wait_s"])
-    ctx.mech.goto(slot="toggle")
+    ctx.mech.goto(slot="toggle", extra=extra)
 
 
 def cmd_pick_prepare(ctx, st):
@@ -378,6 +402,7 @@ def cmd_pick_row(ctx, st):
     # takže kostka před posunem má víc času dojet a nepřibude další brzdění
     shift_next = st.get("shift_at_next", pk.get("shift_at_next", False))
     pending = False
+    shift_extra = st.get("shift_extra", 0)
     picked = 0
     for i, (front, rear) in enumerate(plan["orient"]):
         if i == 0 and prep is not None:
@@ -389,33 +414,37 @@ def cmd_pick_row(ctx, st):
                 if shift_next:
                     pending = True
                 else:
-                    shift_magazine(ctx)
+                    shift_magazine(ctx, shift_extra)
             continue
         if i > 0 and pk.get("wait_clear", True):
-            drive_mm(ctx, pk.get("clear_max_mm", 80), approach_v, until=until_colour(ctx, want=bg))
+            drive_mm(ctx, pk.get("clear_max_mm", 80), approach_v, until=until_block(ctx, present=False))
         max_mm = pk["first_max_mm"] if i == 0 else spacing + pk.get("gap_margin_mm", 100)
-        if not drive_mm(ctx, max_mm, approach_v, until=until_colour(ctx, avoid=bg)):
+        if not drive_mm(ctx, max_mm, approach_v, until=until_block(ctx, present=True)):
             ctx.log("    ! kostka {} nenalezena".format(i + 1))
             break
         if pk.get("settle_mm"):
             drive_mm(ctx, pk["settle_mm"], approach_v)
         if pending:
             ctx.log("    posun zásobníku až u kostky {}".format(i + 1))
-            shift_magazine(ctx)
+            shift_magazine(ctx, shift_extra)
             pending = False
-        seen = read_colour(ctx, pk.get("reads", 5))
-        rot = choose_rot(ctx, seen, front, rear)
-        ctx.log("  {} kostka {}: vidím {} -> {} (front={})".format(ctx.stamp(), i + 1, seen, rot, front))
-        ctx.mech.goto(rot=rot)
+        if st.get("ignore_colours"):
+            # barvy se nečtou, ruce zůstávají, jak jsou (méně pohybů motoru C)
+            ctx.log("  {} kostka {}: barvy ignoruji, ruce zůstávají {}".format(ctx.stamp(), i + 1, ctx.mech.rot))
+        else:
+            seen = read_colour(ctx, pk.get("reads", 5))
+            rot = choose_rot(ctx, seen, front, rear)
+            ctx.log("  {} kostka {}: vidím {} -> {} (front={})".format(ctx.stamp(), i + 1, seen, rot, front))
+            ctx.mech.goto(rot=rot)
         drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"]), advance_v)
         picked += 1
         if picked in pk["shift_after"]:
             if shift_next:
                 pending = True
             else:
-                shift_magazine(ctx)
+                shift_magazine(ctx, shift_extra)
     if pending:
-        shift_magazine(ctx)  # další kostka nebyla, posunout aspoň na konci
+        shift_magazine(ctx, shift_extra)  # další kostka nebyla, posunout aspoň na konci
     ctx.loaded = {"chain_id": st.get("chain_id"), "plan": plan, "count": picked,
                   "append_to": st.get("append_to"), "join_end": st.get("join_end", "front")}
 
