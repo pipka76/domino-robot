@@ -42,7 +42,7 @@ public sealed class Motion
         }
     }
 
-    public async Task<bool> TurnTo(float heading, double timeout = 4)
+    public async Task<bool> TurnTo(float heading, double timeout = 4, float wmax = 3f)
     {
         double end = _now() + timeout;
         while (true)
@@ -50,7 +50,7 @@ public sealed class Motion
             float err = Geo.Wrap(heading - _r.Theta);
             if (Mathf.Abs(err) < 0.006f && Mathf.Abs(_r.YawRate) < 0.15f) break;
             if (_now() > end) { Log($"TurnTo timeout, err={Mathf.RadToDeg(err):0.0}°"); break; }
-            float w = Mathf.Clamp(5f * err, -3f, 3f);
+            float w = Mathf.Clamp(5f * err, -wmax, wmax);
             if (Mathf.Abs(w) < 0.25f) w = 0.25f * Mathf.Sign(err);
             _r.SetTwist(0, w);
             await Tick();

@@ -1,0 +1,14 @@
+{
+  "_": "Ukázkový program: k první kostce horní řady, nabrat levým ramenem, otočit dolů a vyložit.",
+  "steps": [
+    {"cmd": "intake", "arm": "LEFT"},
+    {"cmd": "drive", "mm": 260},
+    {"cmd": "intake", "arm": "NONE"},
+    {"cmd": "turn", "deg": -90},
+    {"cmd": "drive", "mm": 400},
+    {"cmd": "curve", "deg": 90},
+    {"cmd": "drive", "mm": 150},
+    {"cmd": "unload"},
+    {"cmd": "drive", "mm": -170}
+  ]
+}
