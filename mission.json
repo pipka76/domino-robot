@@ -83,7 +83,7 @@
       "nudge_deg": 800,
       "_shift_extra": "Korekce posunu zásobníku na vůli mechaniky: stupně navíc pro posun DO daného slotu (přičte se ke všem transitions do toho slotu, ve směru pohybu).",
       "shift_extra": { "LEFT": 0, "RIGHT": 600 },
-      "initial": { "rot": "CCW", "slot": "RIGHT" },
+      "initial": { "rot": "CW", "slot": "RIGHT" }, "_initial": "start: ruce CW (1. kostka řady A chce CW), zásobník RIGHT – platí i pro testovací mise",
       "rot_positions": { "CW": -1000, "NONE": 0, "CCW": 1000 },
       "transitions": {
         "_": "Posuny zásobníku: ROT,SLOT>ROT,SLOT = relativní stupně (mag_set_left / mag_set_right ze sample.py).",
@@ -155,7 +155,7 @@
       { "cmd": "arm", "nudge": true, "_": "dorovnat zásobník, aby kostky mohly vyjet (vůle mechaniky)" },
       { "cmd": "wait", "s": 0.3 },
       { "cmd": "drive", "mm": -200, "speed": 300, "_": "bylo -150, couvání před výměnou zásobníku bylo krátké" },
-      { "cmd": "arm", "slot": "toggle" },
+      { "cmd": "arm", "slot": "toggle", "extra": 400, "_doladit": "zásobník se při vykládce přetáčel málo -> +400° navíc (k arm.shift_extra.RIGHT 600, celkem 5200)" },
       { "cmd": "arm", "nudge": true },
       { "cmd": "wait", "s": 0.5 },
       { "cmd": "drive", "mm": 200, "speed": 300, "_": "bylo 150, poslední kostka A nevyjela celá" },
@@ -168,7 +168,7 @@
     "main": [
       { "_": "=== 1. JÍZDA: levá řada shora dolů -> řetěz A k levému hornímu rohu žlutého pole ===" },
       { "_": "Start: robot nad levou řadou, míří DOLŮ podél řady." },
-      { "cmd": "pick_row", "row": "left", "count": 4, "chain_id": "A", "approach_speed": 240, "advance_speed": 350, "_doladit": "o trochu rychlejší než výchozí pick (200 / 300)" },
+      { "cmd": "pick_row", "row": "left", "count": 4, "chain_id": "A", "approach_speed": 280, "advance_speed": 350, "advance_extra_mm": { "4": 35 }, "_advance_extra_mm": "4. kostka A se nenabrala -> zasunout o 35 mm navíc (výchozí pick.advance_extra_mm má 20)", "_doladit": "o trochu rychlejší než výchozí pick (200 / 300); approach 240 -> 280. Když přejíždí kostky / čte špatně barvu, vrátit." },
       { "_": "Zatáčka do středu po oblouku (ne na místě, aby zadkem nenarazil do zdi). Jede dolů -> střed je vlevo = +90." },
       { "cmd": "macro", "name": "curve_a", "_": "zatáčka u stěny – ladí se v makru curve_a, test: t_curve_a.py" },
       { "_": "Jízda do středu k levému hornímu rohu žlutého pole – DOLADIT vzdálenosti a natočení tak, aby kostky padaly shora dolů." },
@@ -185,7 +185,7 @@
       { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "rot": "CCW", "_": "ruce už jsou v CCW (nastaví to_bottom hned po vykládce), tady se nehýbou. Zatím samostatný řetěz (napojení do L: append_to A.rear, join_end front)" },
       { "_": "Zatáčka ke spodní řadě: jede dolů -> doprava podél řady = doleva o 90." },
       { "cmd": "macro", "name": "curve_b" },
-      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "shift_extra": 300, "first_advance_mm": 90, "_first_advance_mm": "1. kostku nabere zatáčka jen na okraj -> zasunout ji dál (bylo advance_mm 60), jinak se dostane do zásobníku až po posunu (do špatného slotu)", "shift_overrun_mm": 25, "_shift_overrun_mm": "kostky jsou v řadě B blíž (200 mm) -> 2. kostka nedojede na konec zásobníku; robot po nalezení 3. kostky dojede v jednom kuse ještě 25 mm, pak posune zásobník. Max ~30 (senzor je jen ~35 mm před nabíráním)", "_doladit": "shift_extra: posun zásobníku v řadě B byl moc malý -> +300° navíc (jen řada B)" },
+      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "approach_speed": 230, "_approach_speed": "bylo výchozí 200; když zastaví moc daleko za kostkou, vrátit", "shift_extra": 300, "first_advance_mm": 90, "_first_advance_mm": "1. kostku nabere zatáčka jen na okraj -> zasunout ji dál (bylo advance_mm 60), jinak se dostane do zásobníku až po posunu (do špatného slotu)", "shift_overrun_mm": 25, "_shift_overrun_mm": "kostky jsou v řadě B blíž (200 mm) -> 2. kostka nedojede na konec zásobníku; robot po nalezení 3. kostky dojede v jednom kuse ještě 25 mm, pak posune zásobník. Max ~30 (senzor je jen ~35 mm před nabíráním)", "_doladit": "shift_extra: posun zásobníku v řadě B byl moc malý -> +300° navíc (jen řada B)" },
       { "_": "Zpět do středu: na konci řady míří doprava -> oblouk doleva nahoru -> nahoru ke středu -> otočit doleva a vyložit zprava doleva k hornímu konci A (tvar L). DOLADIT vzdálenosti." },
       { "cmd": "macro", "name": "after_b", "_": "oblouk 180°, doleva za řadu A, nahoru – ladí se v makru after_b" },
       { "_": "Dřív: turn 90 (doleva) + vyložit B do L k A – zatím vypnuto, B jen rovnoběžně." },
@@ -200,18 +200,18 @@
       { "cmd": "drive", "mm": 125 },
       { "cmd": "unload" }
     ],
-    "test_shift":  [ { "_": "Start: rameno CCW, zásobník RIGHT. Posun zásobníku tam a zpět 2x, ve výpisu 'arm ok' je čas a skutečná rychlost." }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" } ],
+    "test_shift":  [ { "_": "Start: rameno CW, zásobník RIGHT. Posun zásobníku tam a zpět 2x, ve výpisu 'arm ok' je čas a skutečná rychlost." }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" }, { "cmd": "wait", "s": 1 }, { "cmd": "arm", "slot": "toggle" } ],
     "test_bottom": [
-      { "_": "Najetí na spodní řadu a její nabrání. Start: robot postavit jako po vykládce A (míří nahoru), zásobník jako na startu mise (RIGHT, rameno CCW)." },
+      { "_": "Najetí na spodní řadu a její nabrání. Start: robot postavit jako po vykládce A (míří nahoru), zásobník jako na startu mise (RIGHT, rameno CW)." },
       { "cmd": "arm", "rot": "NONE", "_": "rameno jako po vykládce" },
       { "cmd": "macro", "name": "to_bottom" },
       { "cmd": "beep", "hz": 1200, "ms": 600 }, { "cmd": "wait", "s": 1.5, "_": "pauza: zkontrolovat polohu před zatáčkou" },
       { "cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B", "rot": "CCW" },
       { "cmd": "macro", "name": "curve_b" },
-      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "shift_extra": 300, "first_advance_mm": 90, "shift_overrun_mm": 25 }
+      { "cmd": "pick_row", "row": "bottom", "first_taken": true, "ignore_colours": true, "approach_speed": 230, "_approach_speed": "bylo výchozí 200; když zastaví moc daleko za kostkou, vrátit", "shift_extra": 300, "first_advance_mm": 90, "shift_overrun_mm": 25 }
     ],
     "test_curve_a": [
-      { "_": "Zatáčka po levé řadě. Start: robot postavit jako po nabrání 4. kostky levé řady (u stěny, míří dolů), zásobník jako na startu mise (RIGHT, rameno CCW)." },
+      { "_": "Zatáčka po levé řadě. Start: robot postavit jako po nabrání 4. kostky levé řady (u stěny, míří dolů), zásobník jako na startu mise (RIGHT, rameno CW)." },
       { "cmd": "arm", "slot": "LEFT", "_": "zásobník do polohy jako po nabrání 4 kostek (posun po 2. kostce)" },
       { "cmd": "wait", "s": 1 },
       { "cmd": "macro", "name": "curve_a" },

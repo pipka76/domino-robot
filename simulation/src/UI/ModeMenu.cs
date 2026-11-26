@@ -8,11 +8,12 @@ namespace DominoSim;
 /// <summary>Start screen: mode 1 (play a program) or mode 2 (drive manually and record).</summary>
 public partial class ModeMenu : CanvasLayer
 {
-    public Action<Session.Mode, ProgramFile> Start;
+    /// <summary>(mode, program for Mode.Play, mission for Mode.Ours)</summary>
+    public Action<Session.Mode, ProgramFile, string> Start;
 
     OptionButton _programs;
     Label _error;
-    readonly List<Func<ProgramFile>> _loaders = new();   // null entry = built-in autonomous strategy
+    readonly List<Action> _choices = new();
     FileDialog _dialog;
 
     public override void _Ready()
@@ -48,7 +49,7 @@ public partial class ModeMenu : CanvasLayer
 
         L("Domino – simulace", 26);
         L("1) Jízda podle programu", 20);
-        L("Robot projede kroky programu (formát mission.json: drive / turn / curve / …) a změří čas.");
+        L("Náš Python kód (main.py s mission.json), nebo uložený záznam kroků z módu 2. Simulace změří čas.");
         _programs = new OptionButton();
         box.AddChild(_programs);
         FillPrograms();
@@ -65,7 +66,7 @@ public partial class ModeMenu : CanvasLayer
         L("2) Ruční jízda se záznamem", 20);
         L("Řídíš robota klávesnicí, každý pohyb se zapíše jako krok (bez čekání). Záznam jde uložit a přehrát v módu 1.");
         var drive = new Button { Text = "🎮  Ruční jízda" };
-        drive.Pressed += () => Start?.Invoke(Session.Mode.Drive, null);
+        drive.Pressed += () => Start?.Invoke(Session.Mode.Drive, null, null);
         box.AddChild(drive);
 
         _error = L("");
@@ -85,33 +86,31 @@ public partial class ModeMenu : CanvasLayer
 
     void FillPrograms()
     {
+        var missions = ProgramFile.MissionNames();
+        string active = ProgramFile.ActiveMission();
+        if (active != null && missions.Remove(active)) missions.Insert(0, active);
+        foreach (var m in missions)
+        {
+            string name = m;
+            _programs.AddItem($"Náš Python kód – mise {m}" + (m == active ? "   (active_mission)" : ""));
+            _choices.Add(() => Start?.Invoke(Session.Mode.Ours, null, name));
+        }
         foreach (var f in ProgramFile.SavedPrograms())
         {
             string path = f;
-            _programs.AddItem("programs/" + Path.GetFileName(f));
-            _loaders.Add(() => ProgramFile.Load(path));
+            _programs.AddItem("Záznam kroků: programs/" + Path.GetFileName(f));
+            _choices.Add(() => TryStart(() => ProgramFile.Load(path)));
         }
-        foreach (var m in ProgramFile.MissionNames())
-        {
-            string name = m;
-            _programs.AddItem($"mission.json: {m}   (jen jízda; pick_row, arm… se přeskočí)");
-            _loaders.Add(() => ProgramFile.Load(ProgramFile.MissionJsonPath, name));
-        }
-        _programs.AddItem("Vestavěná autonomní strategie (původní simulace)");
-        _loaders.Add(null);
+        _programs.AddItem("Vestavěná autonomní strategie (původní simulace, jiný robot)");
+        _choices.Add(() => Start?.Invoke(Session.Mode.Auto, null, null));
         _programs.Selected = 0;
     }
 
-    void OnPlay()
-    {
-        var loader = _loaders[_programs.Selected];
-        if (loader == null) { Start?.Invoke(Session.Mode.Auto, null); return; }
-        TryStart(loader);
-    }
+    void OnPlay() => _choices[_programs.Selected]();
 
     void TryStart(Func<ProgramFile> loader)
     {
-        try { Start?.Invoke(Session.Mode.Play, loader()); }
+        try { Start?.Invoke(Session.Mode.Play, loader(), null); }
         catch (Exception e) { _error.Text = "Chyba: " + e.Message; }
     }
 }

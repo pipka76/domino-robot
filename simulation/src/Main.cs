@@ -8,9 +8,14 @@ namespace DominoSim;
 /// Entry point. Without arguments a start menu offers the two modes:
 ///   1) play a program (list of steps in the mission.json format) and measure its time,
 ///   2) drive manually with the keyboard and record the movements as steps.
+/// Mode 1 can also run OUR Python code (../main.py --sim MISSION through hw_sim.py, see OurRunner).
 /// User args (after "--"):
 ///   --selftest           run planner/geometry checks headless and quit (exit code 1 on failure)
-///   --mission            run the built-in autonomous strategy and quit when finished (use with --headless)
+///   --ours [MISSION]     mode 1 with our Python code (default mission main)
+///   --theirs             mode 1 with the built-in autonomous strategy (MissionController, robot.json)
+///   --mission            quit when the run ends (use with --headless); alone = --ours main
+///   --no-python          with --ours: do not launch Python (run `python3 main.py --sim MISSION` yourself)
+///   --start X Z DEG      start pose for our robot (axle x, z in mm; heading 90 = facing down)
 ///   --program PATH       mode 1 with this program (array of steps, {"steps": [...]}, or mission.json)
 ///   --mission-name NAME  with --program mission.json: which mission (default active_mission)
 ///   --drive              mode 2 (manual driving + recording)
@@ -24,6 +29,8 @@ public partial class Main : Node3D
 {
     public const string LayoutPath = "res://data/layout_varianta_final.json";
     public int SpeedFactor { get; private set; } = 1;
+    public static Vector2 StartPos;
+    public static float StartHeading;
 
     OrbitCamera _cam;
     Func<double> _simTime = () => 0;
@@ -41,8 +48,30 @@ public partial class Main : Node3D
     {
         var args = OS.GetCmdlineUserArgs().ToList();
         var layout = FieldLayout.Load(LayoutPath);
+        if (!Session.ArgsApplied && !args.Contains("--selftest"))
+        {
+            Session.ArgsApplied = true;
+            SetSpeed(ArgInt(args, "--speed", 1));
+            int pi = args.IndexOf("--program");
+            int oi = args.IndexOf("--ours");
+            if (args.Contains("--theirs")) Session.Current = Session.Mode.Auto;
+            else if (args.Contains("--drive")) Session.Current = Session.Mode.Drive;
+            else if (pi >= 0 && pi + 1 < args.Count)
+            {
+                int mi = args.IndexOf("--mission-name");
+                Session.Program = ProgramFile.Load(System.IO.Path.GetFullPath(args[pi + 1]), mi >= 0 && mi + 1 < args.Count ? args[mi + 1] : null);
+                Session.Current = Session.Mode.Play;
+            }
+            else if (oi >= 0 || args.Contains("--mission"))
+            {
+                Session.Current = Session.Mode.Ours;
+                Session.OursMission = oi >= 0 && oi + 1 < args.Count && !args[oi + 1].StartsWith("--") ? args[oi + 1] : "main";
+            }
+        }
+        // Our robot everywhere except the original autonomous strategy (built for its own robot concept).
+        bool oursRobot = Session.Current != Session.Mode.Auto;
         int ri = args.IndexOf("--robot");
-        RobotSpec.Load(ri >= 0 && ri + 1 < args.Count ? args[ri + 1] : "res://data/robot.json");
+        RobotSpec.Load(ri >= 0 && ri + 1 < args.Count ? args[ri + 1] : oursRobot ? "res://data/robot_ours.json" : "res://data/robot.json");
         DriveConfig.Load();
         GD.Print(RobotSpec.Describe());
         GD.Print(DriveConfig.Describe());
@@ -52,21 +81,6 @@ public partial class Main : Node3D
             bool ok = SelfTest.Run(layout);
             GetTree().Quit(ok ? 0 : 1);
             return;
-        }
-
-        if (!Session.ArgsApplied)
-        {
-            Session.ArgsApplied = true;
-            SetSpeed(ArgInt(args, "--speed", 1));
-            int pi = args.IndexOf("--program");
-            if (args.Contains("--mission")) Session.Current = Session.Mode.Auto;
-            else if (args.Contains("--drive")) Session.Current = Session.Mode.Drive;
-            else if (pi >= 0 && pi + 1 < args.Count)
-            {
-                int mi = args.IndexOf("--mission-name");
-                Session.Program = ProgramFile.Load(System.IO.Path.GetFullPath(args[pi + 1]), mi >= 0 && mi + 1 < args.Count ? args[mi + 1] : null);
-                Session.Current = Session.Mode.Play;
-            }
         }
         if (Session.Current == Session.Mode.Drive) SetSpeed(1);
 
@@ -95,11 +109,26 @@ public partial class Main : Node3D
         AddChild(robot);
         var startPos = layout.RobotStart;
         float startHeading = layout.RobotStartHeading;
+        if (oursRobot)
+        {
+            // Our start: magazine (rear, 190 mm behind the axle) against the top wall, above the left row, facing down.
+            startPos = new Vector2(0.132f, RobotSpec.Length - RobotSpec.AxleFromFront + 0.002f);
+            startHeading = Mathf.Pi / 2f;
+            int st = args.IndexOf("--start");
+            if (st >= 0 && st + 3 < args.Count)
+            {
+                startPos = new Vector2(float.Parse(args[st + 1], System.Globalization.CultureInfo.InvariantCulture) * 0.001f,
+                                       float.Parse(args[st + 2], System.Globalization.CultureInfo.InvariantCulture) * 0.001f);
+                startHeading = Mathf.DegToRad(float.Parse(args[st + 3], System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
         if (Session.Current == Session.Mode.Play && Session.Program?.Start is { } s)
         {
             startPos = new Vector2(s.x, s.z) * 0.001f;
             startHeading = Mathf.DegToRad(s.heading);
         }
+        StartPos = startPos;
+        StartHeading = startHeading;
         robot.GlobalTransform = new Transform3D(Geo.YawBasis(startHeading), Geo.V3(startPos, 0.002f));
 
         int si = args.IndexOf("--screenshot");
@@ -115,10 +144,11 @@ public partial class Main : Node3D
             case Session.Mode.Menu:
                 AddChild(new ModeMenu
                 {
-                    Start = (mode, program) =>
+                    Start = (mode, program, mission) =>
                     {
                         Session.Current = mode;
                         Session.Program = program;
+                        Session.OursMission = mission ?? Session.OursMission;
                         Session.PendingSteps = null;
                         GetTree().ReloadCurrentScene();
                     },
@@ -129,7 +159,20 @@ public partial class Main : Node3D
                 var mission = new MissionController { Robot = robot, Dominos = dominos, Layout = layout, AutoQuit = args.Contains("--mission") };
                 AddChild(mission);
                 _simTime = () => mission.SimTime;
-                AddChild(new Hud { TextFn = () => AutoText(mission), Help = PlayHelp });
+                AddChild(new Hud { TextFn = () => InfoText("MÓD 1 – vestavěná autonomní strategie", mission), Help = PlayHelp });
+                break;
+            }
+            case Session.Mode.Ours:
+            {
+                var runner = new OurRunner
+                {
+                    Robot = robot, Dominos = dominos, Layout = layout, MissionName = Session.OursMission,
+                    RepoDir = ProjectSettings.GlobalizePath("res://").TrimEnd('/') + "/..",
+                    LaunchPython = !args.Contains("--no-python"), AutoQuit = args.Contains("--mission"),
+                };
+                AddChild(runner);
+                _simTime = () => runner.SimTime;
+                AddChild(new Hud { TextFn = () => InfoText($"MÓD 1 – náš Python kód, mise '{Session.OursMission}'", runner), Help = PlayHelp });
                 break;
             }
             case Session.Mode.Play:
@@ -152,15 +195,14 @@ public partial class Main : Node3D
         GD.Print($"Domino sim started. mode={Session.Current} round2={round2} seed={seed}");
     }
 
-    string AutoText(MissionController m)
+    string InfoText(string title, IMissionInfo m)
     {
         double t = m.SimTime;
-        string timer = t <= MissionController.MatchTime ? $"{MissionController.MatchTime - t:0.0} s left" : $"+{t - MissionController.MatchTime:0.0} s over 90 s";
-        string last = m.JointLog.Count > 0 ? m.JointLog[^1].Trim() : "-";
-        return $"Autonomní strategie   t = {t:0.0} s   ({timer})   speed x{SpeedFactor}\n" +
-               $"State: {m.State}\n" +
-               $"Carried: {m.CarriedText()}   Placed: {m.PlacedCount}/16\n" +
-               $"Last joint: {last}\n" +
+        string timer = t <= MissionController.MatchTime ? $"zbývá {MissionController.MatchTime - t:0.0} s" : $"+{t - MissionController.MatchTime:0.0} s přes 90 s";
+        return $"{title}   t = {t:0.0} s   ({timer})   rychlost x{SpeedFactor}\n" +
+               $"Stav: {m.State}\n" +
+               $"Zásobník: {m.CarriedText()}   Položeno: {m.PlacedCount}/16\n" +
+               $"Poslední: {m.LastLine}\n" +
                m.Summary();
     }
 

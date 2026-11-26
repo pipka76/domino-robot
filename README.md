@@ -35,6 +35,7 @@ python3 main.py --mock test_arm          # simulace konkrétní mise
 python3 main.py --mock --flip            # kostky náhodně otočené o 180° (2. kolo)
 python3 main.py --mock --side right      # simulace pro pravou půlku hřiště
 python3 main.py --mock --realtime        # simulace v reálném čase (výpis běží stejně rychle jako robot)
+"/Applications/Godot_mono.app/Contents/MacOS/Godot" --path simulation   # 3D simulace naší mise main (Godot + hw_sim.py); jiná mise: -- --ours test_bottom
 ```
 
 Simulace vypíše jednotlivé kroky s časem, plán natočení kostek, pohyby motoru C a celkový čas. Hodí se ke kontrole, že je JSON v pořádku a že se mise vejde do časového limitu. Rychlosti v simulaci jsou jen přibližné.
@@ -135,7 +136,7 @@ JSON nepodporuje komentáře, proto se jako komentáře používají klíče za�
 | `wait_clear`, `clear_max_mm` | Před hledáním další kostky nejdřív popojet, dokud senzor neuvidí pozadí |
 | `settle_mm` | Popojetí po nalezení kostky před čtením barvy |
 | `advance_mm`, `advance_speed` | Popojetí po otočení kostky (zasunutí do robota) |
-| `advance_extra_mm` | Prodloužení zasunutí pro konkrétní kostku, např. `{ "4": 20 }` = 4. kostka o 20 mm dál |
+| `advance_extra_mm` | Prodloužení zasunutí pro konkrétní kostku, např. `{ "4": 20 }` = 4. kostka o 20 mm dál. Lze přepsat i v kroku `pick_row` (jen pro tu řadu) |
 | `shift_at_next` | `true` = posun zásobníku až u další kostky (robot tam stejně stojí), ne hned po zasunutí |
 | `reads` | Počet čtení barvy (vybere se nejčastější) |
 
@@ -162,7 +163,7 @@ Mise je seznam kroků. Každý krok má `"cmd"` a parametry. Krok se dá dočasn
 | `follow_line` | `mm`, [`edge`: left/right], [`speed`], [`kp`], [`target`] | Sledování hrany čáry podle odraženého světla |
 | `pick_row` | `row`, [`count`], [`reverse`], [`chain_id`], [`append_to`], [`join_end`], [`spacing_mm`], [`first_taken`], [`first_advance_mm`], [`approach_speed`], [`advance_speed`], [`ignore_colours`], [`shift_extra`], [`shift_wait_s`], [`shift_overrun_mm`] | Nabere kostky z řady (viz níže). `first_taken: true` = 1. kostku už nabrala zatáčka po `pick_prepare`. |
 | `unload` | [`chain_id`], [`macro`] | Spustí makro `unload` a zapamatuje si položený řetěz |
-| `arm` | [`rot`], [`slot`], [`nudge`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. `nudge: true` (nebo počet stupňů) dorovná zásobník: dojede do krajní rotace slotu a ještě o `arm.nudge_deg` dál. |
+| `arm` | [`rot`], [`slot`], [`extra`], [`nudge`] | Nastaví motor C. `slot` může být `LEFT`, `RIGHT` nebo `toggle`. `extra` = stupně navíc k posunu zásobníku (jen pro tento krok, např. ve vykládce). `nudge: true` (nebo počet stupňů) dorovná zásobník: dojede do krajní rotace slotu a ještě o `arm.nudge_deg` dál. |
 | `arm_home` | – | Vrátí motor C do stavu `initial` |
 | `macro` | `name` | Spustí makro |
 | `wait` | `s` | Čekání |

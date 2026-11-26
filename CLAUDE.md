@@ -15,6 +15,12 @@ python3 planner.py                 # ověří, že z každé řady jde složit �
 python3 main.py --mock             # simulace active_mission (virtuální čas, „Celkový čas“ na konci)
 python3 main.py --mock test_bottom # konkrétní mise; --flip = kostky otočené o 180°; --side right; --realtime
 ```
+3D simulace (Godot, složka `simulation/` od Jiřího): `"/Applications/Godot_mono.app/Contents/MacOS/Godot" --path simulation`
+→ menu se 2 módy: **1** = jízda kódu s měřením času (náš Python: `-- --ours MISE`; záznam kroků: `-- --program SOUBOR`;
+Jiřího MissionController: `-- --theirs`), **2** = ruční jízda klávesnicí, pohyby se ukládají jako kroky `drive`/`turn`/`curve`
+do `simulation/programs/` (`-- --drive`). Headless: `--headless --fixed-fps 120 -- --ours main --mission`.
+Náš Python běží přes `hw_sim.py` (TCP 5577, lock-step), model zásobníku/rukou v `simulation/src/Ours/OurRunner.cs`;
+`mechanism.py` hlásí stav přes `hw.arm_target`. Po změně C# `dotnet build` v `simulation/`.
 Po každé změně kódu/JSONu spustit aspoň `python3 main.py --mock` (validace + čas mise) a u dotčených
 testů i jejich misi. Simulace NEověřuje fyziku (mock vidí polovinu kostky s indexem 0, odražené světlo
 podlahy 17 / kostky 40 z `mission.json` → `mock`).
@@ -46,7 +52,7 @@ Po úpravě vždy napsat, **které soubory nahrát znovu**. Commit/push jen na p
 - `t_*.py` – spouštěče testovacích misí (`t_bottom.py` → `test_bottom`); `kalibrace_gyra.py`; `sample.py` jen reference.
 
 ## Mise `main` (levá půlka) – aktuální stav
-1. Start ručně: zadek zásobníkem u horní stěny nad levou řadou, ruce `CCW`, zásobník `RIGHT` (nastavuje uživatel).
+1. Start ručně: zadek zásobníkem u horní stěny nad levou řadou, ruce `CW`, zásobník `RIGHT` (nastavuje uživatel, = `arm.initial`).
    `pick_row left` → A; makro `curve_a` (couvnout 40 + větší oblouk, jinak zásobník drhne o stěnu); doprava,
    nahoru (`drive 550`), `unload` A.
 2. Makro `to_bottom`: couvnout zásobníkem k levé stěně, otočka dolů kolem pravého kola (zůstane u zdi),

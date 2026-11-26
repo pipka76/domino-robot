@@ -1,14 +1,14 @@
 {
-  "_": "Ukázkový program: k první kostce horní řady, nabrat levým ramenem, otočit dolů a vyložit.",
+  "_": "Ukázkový záznam: ze startu dolů podél levé řady, nabrat 2 kostky levým ramenem, obloukem doprava do žlutého pole, vyložit.",
+  "start": {"x": 132, "z": 192, "heading": 90},
   "steps": [
     {"cmd": "intake", "arm": "LEFT"},
-    {"cmd": "drive", "mm": 260},
+    {"cmd": "drive", "mm": 560},
     {"cmd": "intake", "arm": "NONE"},
-    {"cmd": "turn", "deg": -90},
-    {"cmd": "drive", "mm": 400},
+    {"cmd": "drive", "mm": -40},
     {"cmd": "curve", "deg": 90},
-    {"cmd": "drive", "mm": 150},
+    {"cmd": "drive", "mm": 250},
     {"cmd": "unload"},
-    {"cmd": "drive", "mm": -170}
+    {"cmd": "drive", "mm": -60}
   ]
 }

@@ -15,27 +15,30 @@ The robot works as follows:
 The project is built with `dotnet build`, or by opening it in the Godot_mono editor and pressing Play.
 Without arguments a **start menu** offers two modes:
 
-1. **Jízda podle programu** – the robot runs a list of steps and the sim measures the time (per step and in total,
-   with the 90 s limit). Choose a file from `programs/`, a mission from `../mission.json` (only the driving steps
-   run; `pick_row`, `arm`, … are skipped because the sim robot has a different mechanism), any JSON file
-   (“Otevřít soubor…”), or the original built-in autonomous strategy.
+1. **Jízda podle programu** – runs code and measures the time (90 s limit). Choose:
+   - **our Python code** with any mission of `../mission.json` (see *Running our Python mission* below),
+   - a recorded program from `programs/` or any JSON file (“Otevřít soubor…”) – the time is shown per step and in total,
+   - the original built-in autonomous strategy (`MissionController`, its own robot `data/robot.json`).
 2. **Ruční jízda se záznamem** – drive with the keyboard; every movement is recorded as one step
    (`drive` / `turn` / `curve` in the mission.json format, + = left). Pauses are not recorded, consecutive
    movements of the same kind are merged. Turns are measured from the reference heading, like
    `drive.absolute_heading` on the real robot, so the replay ends where the manual run ended (≈1 cm).
    Saved to `programs/zaznam_<time>.json`; the step array is also printed and copied to the clipboard.
 
-Speeds come from `../mission.json` → `robot.drive` (`speed`, `turn_speed`, `curve_inner/outer_speed`, `deg_per_mm`).
+Everything except the built-in strategy uses our robot (`data/robot_ours.json`) and our start (magazine against
+the top wall above the left row, facing down; `--start` overrides it). Speeds come from `../mission.json` → `robot.drive` (`speed`, `turn_speed`, `curve_inner/outer_speed`, `deg_per_mm`).
 
 | Command (from the project root) | What it does |
 |---|---|
 | `"/Applications/Godot_mono.app/Contents/MacOS/Godot" --path .` | Windowed run with the start menu. |
+| `… --path . -- --ours test_bottom` | Mode 1 with our Python code directly (`--ours` alone = `main`). |
+| `… --path . -- --theirs` | Mode 1 with the built-in autonomous strategy. |
 | `… --path . -- --program programs/ukazka.json` | Mode 1 with this program directly. |
 | `… --headless --path . --fixed-fps 120 -- --program FILE --quit` | Mode 1 headless, prints the step times and quits. |
-| `… -- --program ../mission.json --mission-name main` | Driving steps of one mission from mission.json. |
+| `… -- --program ../mission.json --mission-name main` | Only the driving steps of a mission, without Python (`pick_row`, `arm`, … skipped). |
 | `… --path . -- --drive` | Mode 2 directly. |
 | `… --headless --path . -- --selftest` | Checks the layout, formation geometry, chain plan and A* reachability. Exit code 1 on failure. |
-| `… --headless --path . --fixed-fps 120 -- --mission` | Runs the built-in autonomous strategy faster than real time, prints a log and quits. |
+| `… --headless --path . --fixed-fps 120 -- --ours main --mission` | Our Python code faster than real time, prints the log and quits (`--theirs --mission` = built-in strategy). |
 | `… -- --round2 <seed>` | Rotates random pieces by 180°, as allowed in round 2. |
 | `… -- --robot res://data/robot_small.json` | Uses a different robot geometry. The default is `data/robot.json` (280×200 mm). |
 | `… -- --speed 4` | Starts at 4× speed. The physics step stays at 1/120 s. |
@@ -46,7 +49,7 @@ Supported steps: `drive` (`mm`, `speed`, `hold`, `tail_s`, `tail_speed`), `drive
 `curve` (`deg`, `inner`, `outer`, `s_per_90`), `wait` (`s`), `macro` (`name`), `log`, `unload` (leaves the stored pieces) and the
 sim-only `intake` (`arm`: `LEFT` / `RIGHT` / `NONE`). Speeds are wheel deg/s as on the real robot. Other steps are skipped.
 
-**Keys, mode 1 / autonomous:** `1`–`4` speed ×1/×2/×4/×8, `R` restart, `Esc` menu, `T` top/orbit view, `F` follow robot,
+**Keys, mode 1:** `1`–`4` speed ×1/×2/×4/×8, `R` restart, `Esc` menu, `T` top/orbit view, `F` follow robot,
 right mouse drag orbit, wheel zoom.
 
 **Keys, mode 2:**
@@ -56,6 +59,28 @@ right mouse drag orbit, wheel zoom.
 - `J` / `L`: lower the left / right arm, `K`: raise it; `Space`: unload
 - `Backspace`: undo the last step (restarts and replays the rest quickly)
 - `Ctrl+S`: save, `Enter`: save and play it in mode 1, `R`: start over, `Esc`: menu
+
+## Running our Python mission
+
+In the menu: mode 1 → “Náš Python kód – mise …”, or `-- --ours MISSION` on the command line.
+
+Drives the robot with the team's real Python code (`../main.py`, `actions.py`, `mechanism.py`,
+`mission.json`) instead of `MissionController`. Python is the brain, Godot is the hardware
+(wheels, encoders, gyro, colour sensor, motor C state). They talk over TCP 127.0.0.1:5577 in
+lock-step: sim time only runs while Python is in `hw.sleep()`. See `../hw_sim.py` and `src/Ours/OurRunner.cs`.
+
+| Command (from the repo root) | What it does |
+|---|---|
+| `"/Applications/Godot_mono.app/Contents/MacOS/Godot" --path simulation -- --ours main` | Windowed run of mission `main`; Godot starts `python3 main.py --sim main` itself. |
+| `… --headless --path simulation --fixed-fps 120 -- --ours main --mission` | Fast run, prints the log and quits. |
+| `… -- --ours test_bottom --start 180 900 -90` | Another mission with a start pose (axle x, z in mm, heading in degrees: 90 = facing down). |
+| `… -- --ours main --no-python` + `python3 main.py --sim main` | Start Python yourself (its output in your terminal). |
+
+Python errors are written to `simulation/ours_python.log`. The robot is `data/robot_ours.json`
+(365×220 mm, axle 175 mm behind the front). Mechanism model: lowered hands capture a crosswise
+piece at the pick-up line and turn it by 90°; two magazine lanes (LEFT/RIGHT) of 2 pieces, a shift
+switches the active lane at once (a piece still being captured goes to the new lane); reversing
+≥ 50 mm drops the active lane (unload). The sensor sees pieces only (floor = WHITE, reflected 17), no black lines.
 
 ## Structure
 

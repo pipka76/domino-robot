@@ -105,6 +105,12 @@ public sealed class ProgramFile
         catch { return new(); }
     }
 
+    public static string ActiveMission()
+    {
+        try { return JsonNode.Parse(File.ReadAllText(MissionJsonPath))?["active_mission"]?.GetValue<string>(); }
+        catch { return null; }
+    }
+
     public static List<string> SavedPrograms()
     {
         if (!Directory.Exists(ProgramsDir)) return new();
@@ -166,10 +172,12 @@ public sealed class ProgramFile
 /// <summary>What to do after the scene (re)loads. Survives ReloadCurrentScene.</summary>
 public static class Session
 {
-    public enum Mode { Menu, Auto, Play, Drive }
+    public enum Mode { Menu, Auto, Ours, Play, Drive }
     public static Mode Current = Mode.Menu;
     public static bool ArgsApplied;
     public static ProgramFile Program;
+    /// <summary>Mission of mission.json run by our Python code (Mode.Ours).</summary>
+    public static string OursMission = "main";
     /// <summary>Drive mode: steps replayed (fast) before manual control continues (used by undo).</summary>
     public static List<JsonObject> PendingSteps;
 }

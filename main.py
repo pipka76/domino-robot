@@ -1,5 +1,6 @@
 """Vstupní bod. Na robotu: spustit main.py (mise podle `active_mission`).
 Na PC:  python3 main.py --mock [název_mise] [--flip] [--side left|right] [--realtime]
+3D simulace (Godot, složka simulation/): python3 main.py --sim [název_mise], viz hw_sim.py
 """
 import json
 import sys
@@ -66,6 +67,7 @@ def main(argv):
     flags = [a for a in argv if a.startswith("--")]
     args = [a for a in argv if not a.startswith("--")]
     mock = "--mock" in flags
+    sim = "--sim" in flags
     cfg = load()
     if "--side" in argv:
         cfg["side"] = argv[argv.index("--side") + 1]
@@ -83,6 +85,9 @@ def main(argv):
     if mock:
         from hw_mock import MockHardware
         hw = MockHardware(cfg, flip="--flip" in flags, realtime="--realtime" in flags)
+    elif sim:
+        from hw_sim import SimHardware
+        hw = SimHardware(cfg)
     else:
         from hw import Hardware
         hw = Hardware(cfg)
@@ -104,8 +109,10 @@ def main(argv):
     finally:
         hw.stop_all()
     print("Řetězy: {}".format(ctx.chains))
-    if mock:
+    if mock or sim:
         print("Celkový čas: {:.1f} s, motor C celkem {:.0f} deg".format(hw.now() - ctx.t0, hw.arm_total))
+    if sim:
+        hw.close()
     return 0
 
 

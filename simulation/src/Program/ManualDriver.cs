@@ -271,10 +271,8 @@ public partial class ManualDriver : SimDriver
 
     public ProgramFile ToProgram()
     {
-        float startHeading = Mathf.RadToDeg(Layout.RobotStartHeading);
         var p = new ProgramFile { Steps = Steps.Select(s => (JsonObject)s.DeepClone()).ToList() };
-        var start = Session.Program?.Start;
-        p.Start = start ?? (Layout.RobotStart.X * 1000f, Layout.RobotStart.Y * 1000f, startHeading);
+        p.Start = (Main.StartPos.X * 1000f, Main.StartPos.Y * 1000f, Mathf.RadToDeg(Main.StartHeading));
         return p;
     }
 
@@ -295,7 +293,7 @@ public partial class ManualDriver : SimDriver
     public string StatusText()
     {
         string seg = _replaying ? "přehrávám záznam…" : _busy != null ? "otáčím…" : _settling ? "zastavuji…" : _seg.Kind != Kind.None ? $"{_seg.Kind} {(_seg.Sign > 0 ? "+" : "-")}{(_seg.Slow ? " pomalu" : "")}" : "stojí";
-        float hdg = -Mathf.RadToDeg(Geo.Wrap(Robot.Theta - Layout.RobotStartHeading));
+        float hdg = -Mathf.RadToDeg(Geo.Wrap(Robot.Theta - Main.StartHeading));
         return $"MÓD 2 – ruční jízda se záznamem   kroků: {Steps.Count}   čas jízdy (bez čekání) ≈ {MoveTime:0.0} s\n" +
                $"Robot: {seg}   x = {Robot.Pos2.X * 1000:0} mm, z = {Robot.Pos2.Y * 1000:0} mm, směr od startu {hdg:+0;-0}° (+ = doleva)\n" +
                $"Zásobník: {CarriedText()}   rameno: {Robot.Intake.Arm}\n" +
