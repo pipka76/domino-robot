@@ -13,7 +13,7 @@ namespace DominoSim;
 /// release and back off. Navigation uses the true robot pose (no localisation model yet);
 /// piece colours/orientation are taken from the simulated colour sensors at capture time.
 /// </summary>
-public partial class MissionController : Node
+public partial class MissionController : Node, IMissionInfo
 {
     public const double MatchTime = 90.0;
 
@@ -27,6 +27,7 @@ public partial class MissionController : Node
     public string State { get; private set; } = "starting";
     public bool Finished { get; private set; }
     public readonly List<string> JointLog = new();
+    public string LastLine => JointLog.Count > 0 ? JointLog[^1].Trim() : "-";
 
     readonly PhysicsTicker _ticker = new();
     Motion _m;

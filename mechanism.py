@@ -74,6 +74,8 @@ class Mechanism:
             if extra and s != self.slot:
                 deg += extra if deg >= 0 else -extra
             self.log("    arm {:+} deg  {},{} -> {},{}".format(deg, self.rot, self.slot, r, s))
+            if hasattr(self.hw, "arm_target"):  # jen 3D simulace (hw_sim.py)
+                self.hw.arm_target(r, s)
             self.hw.arm_move(deg, speed)
             self.rot, self.slot = r, s
 
@@ -94,6 +96,8 @@ class Mechanism:
         # Pevný počet stupňů, bez hlídání zablokování (na dorazu nefungovalo); krátký timeout,
         # aby motor zbytečně netlačil do dorazu.
         speed = self.cfg.get("nudge_speed", self.cfg["shift_speed"])
+        if hasattr(self.hw, "arm_target"):  # jen 3D simulace (hw_sim.py)
+            self.hw.arm_target(end_rot, self.slot)
         moved = self.hw.arm_move(move, speed, stall_s=0, extra_wait_s=0.3)
         self.rot = end_rot
         if moved is None or not self.cfg.get("nudge_return", True):

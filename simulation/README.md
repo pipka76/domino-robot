@@ -32,6 +32,29 @@ The project is built with `dotnet build`, or by opening it in the Godot_mono edi
 - Right mouse drag: orbit
 - Mouse wheel: zoom
 
+## Running our Python mission (default)
+
+**This is now the default mode** (Play in the editor runs it). The original autonomous
+`MissionController` runs with `-- --theirs` (add it to the commands above), or press `O` to switch.
+
+Drives the robot with the team's real Python code (`../main.py`, `actions.py`, `mechanism.py`,
+`mission.json`) instead of `MissionController`. Python is the brain, Godot is the hardware
+(wheels, encoders, gyro, colour sensor, motor C state). They talk over TCP 127.0.0.1:5577 in
+lock-step: sim time only runs while Python is in `hw.sleep()`. See `../hw_sim.py` and `src/Ours/OurRunner.cs`.
+
+| Command (from the repo root) | What it does |
+|---|---|
+| `"/Applications/Godot_mono.app/Contents/MacOS/Godot" --path simulation` | Windowed run of mission `main`; Godot starts `python3 main.py --sim main` itself. `-- --ours test_bottom` picks another mission. |
+| `… --headless --path simulation --fixed-fps 120 -- --ours main --mission` | Fast run, prints the log and quits. |
+| `… -- --ours test_bottom --start 180 900 -90` | Another mission with a start pose (axle x, z in mm, heading in degrees: 90 = facing down). |
+| `… -- --ours main --no-python` + `python3 main.py --sim main` | Start Python yourself (its output in your terminal). |
+
+Python errors are written to `simulation/ours_python.log`. The robot is `data/robot_ours.json`
+(365×220 mm, axle 175 mm behind the front). Mechanism model: lowered hands capture a crosswise
+piece at the pick-up line and turn it by 90°; two magazine lanes (LEFT/RIGHT) of 2 pieces, a shift
+switches the active lane at once (a piece still being captured goes to the new lane); reversing
+≥ 50 mm drops the active lane (unload). The sensor sees pieces only (floor = WHITE, reflected 17), no black lines.
+
 ## Structure
 
 | Path | Purpose |

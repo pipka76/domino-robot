@@ -12,6 +12,10 @@ namespace DominoSim;
 ///   --robot RES_PATH   robot geometry file (default res://data/robot.json)
 ///   --speed N          initial simulation speed factor
 ///   --screenshot PATH  save a screenshot at --shot-time seconds of sim time (default 12) and quit
+///   (default)          drive OUR Python code (../main.py --sim MISSION, default main); --ours MISSION picks the mission;
+///   --theirs           use the original MissionController instead (key O switches);
+///                      robot data/robot_ours.json; --start X Z HEADING_DEG (mm, mm, 90 = facing +z/down);
+///                      --no-python = do not launch Python (run `python3 main.py --sim MISSION` yourself)
 /// </summary>
 public partial class Main : Node3D
 {
@@ -19,7 +23,10 @@ public partial class Main : Node3D
     public int SpeedFactor { get; private set; } = 1;
 
     OrbitCamera _cam;
-    MissionController _mission;
+    IMissionInfo _mission;
+    /// <summary>Set by the O key; survives scene reload (Play from the editor has no command-line args).</summary>
+    public static bool? OursOverride;
+    public static bool OursActive;
     string _shotPath;
     double _shotTime;
 
@@ -28,7 +35,11 @@ public partial class Main : Node3D
         var args = OS.GetCmdlineUserArgs().ToList();
         var layout = FieldLayout.Load(LayoutPath);
         int ri = args.IndexOf("--robot");
-        RobotSpec.Load(ri >= 0 && ri + 1 < args.Count ? args[ri + 1] : "res://data/robot.json");
+        // Výchozí je náš režim (Python přes hw_sim.py). Původní MissionController: argument --theirs,
+        // nebo klávesa O (přepíná a restartuje).
+        bool ours = OursOverride ?? !args.Contains("--theirs");
+        OursActive = ours;
+        RobotSpec.Load(ri >= 0 && ri + 1 < args.Count ? args[ri + 1] : ours ? "res://data/robot_ours.json" : "res://data/robot.json");
         GD.Print(RobotSpec.Describe());
 
         if (args.Contains("--selftest"))
@@ -62,11 +73,43 @@ public partial class Main : Node3D
 
         var robot = new Robot();
         AddChild(robot);
-        robot.GlobalTransform = new Transform3D(Geo.YawBasis(layout.RobotStartHeading), Geo.V3(layout.RobotStart, 0.002f));
+        var startPos = layout.RobotStart;
+        float startHeading = layout.RobotStartHeading;
+        if (ours)
+        {
+            // Our start: magazine (rear, 190 mm behind the axle) against the top wall, above the left row, facing down.
+            startPos = new Vector2(0.132f, RobotSpec.Length - RobotSpec.AxleFromFront + 0.002f);
+            startHeading = Mathf.Pi / 2f;
+            int st = args.IndexOf("--start");
+            if (st >= 0 && st + 3 < args.Count)
+            {
+                startPos = new Vector2(float.Parse(args[st + 1]) * 0.001f, float.Parse(args[st + 2]) * 0.001f);
+                startHeading = Mathf.DegToRad(float.Parse(args[st + 3]));
+            }
+        }
+        robot.GlobalTransform = new Transform3D(Geo.YawBasis(startHeading), Geo.V3(startPos, 0.002f));
 
-        var mission = new MissionController { Robot = robot, Dominos = dominos, Layout = layout, AutoQuit = args.Contains("--mission") };
+        Node mission;
+        if (ours)
+        {
+            int oi = args.IndexOf("--ours");
+            string name = oi >= 0 && oi + 1 < args.Count && !args[oi + 1].StartsWith("--") ? args[oi + 1] : "main";
+            var runner = new OurRunner
+            {
+                Robot = robot, Dominos = dominos, Layout = layout, MissionName = name,
+                RepoDir = ProjectSettings.GlobalizePath("res://").TrimEnd('/') + "/..",
+                LaunchPython = !args.Contains("--no-python"), AutoQuit = args.Contains("--mission"),
+            };
+            mission = runner;
+            _mission = runner;
+        }
+        else
+        {
+            var mc = new MissionController { Robot = robot, Dominos = dominos, Layout = layout, AutoQuit = args.Contains("--mission") };
+            mission = mc;
+            _mission = mc;
+        }
         AddChild(mission);
-        _mission = mission;
         int si = args.IndexOf("--screenshot");
         if (si >= 0 && si + 1 < args.Count) _shotPath = args[si + 1];
         _shotTime = ArgInt(args, "--shot-time", 12);
@@ -75,7 +118,7 @@ public partial class Main : Node3D
         AddChild(_cam);
         _cam.MakeCurrent();
 
-        AddChild(new Hud { Mission = mission, MainNode = this });
+        AddChild(new Hud { Mission = _mission, MainNode = this });
         GD.Print($"Domino sim started. round2={round2} seed={seed}");
     }
 
@@ -118,6 +161,7 @@ public partial class Main : Node3D
             case Key.T: _cam?.ToggleTop(); break;
             case Key.F: _cam?.ToggleFollow(); break;
             case Key.R: GetTree().ReloadCurrentScene(); break;
+            case Key.O: OursOverride = !OursActive; GetTree().ReloadCurrentScene(); break;
         }
     }
 }

@@ -351,10 +351,13 @@ def _pick_plan(ctx, st):
     return pairs, plan
 
 
-def advance_len(ctx, picked_after, base):
+def advance_len(ctx, picked_after, base, extra_map=None):
     """Délka zasunutí kostky; před posunem zásobníku prodloužená o pick.shift_advance_mm,
-    pro konkrétní kostku (pořadí od 1) navíc o pick.advance_extra_mm["N"]."""
-    mm = base + ctx.pick.get("advance_extra_mm", {}).get(str(picked_after), 0)
+    pro konkrétní kostku (pořadí od 1) navíc o pick.advance_extra_mm["N"]
+    (extra_map = přepsání z kroku pick_row, jen pro tu řadu)."""
+    if extra_map is None:
+        extra_map = ctx.pick.get("advance_extra_mm", {})
+    mm = base + extra_map.get(str(picked_after), 0)
     if picked_after in ctx.pick["shift_after"]:
         mm += ctx.pick.get("shift_advance_mm", 0)
     return mm
@@ -412,6 +415,7 @@ def cmd_pick_row(ctx, st):
     # rychlosti lze přepsat v kroku pick_row (např. jen pro jednu řadu)
     approach_v = st.get("approach_speed", pk["approach_speed"])
     advance_v = st.get("advance_speed", pk.get("advance_speed"))
+    extra_map = st.get("advance_extra_mm")  # None = pick.advance_extra_mm
     # pick.shift_at_next: zásobník se posune až u další kostky (robot tam stejně zastaví),
     # takže kostka před posunem má víc času dojet a nepřibude další brzdění
     shift_next = st.get("shift_at_next", pk.get("shift_at_next", False))
@@ -423,7 +427,7 @@ def cmd_pick_row(ctx, st):
         if i == 0 and prep is not None:
             ctx.log("  {} kostka 1: nabraná zatáčkou, rameno připraveno {} (front={}), senzor teď vidí {}".format(
                 ctx.stamp(), ctx.mech.rot, front, ctx.hw.colour()))
-            drive_mm(ctx, advance_len(ctx, picked + 1, st.get("first_advance_mm", pk["advance_mm"])), advance_v)
+            drive_mm(ctx, advance_len(ctx, picked + 1, st.get("first_advance_mm", pk["advance_mm"]), extra_map), advance_v)
             picked += 1
             if picked in pk["shift_after"]:
                 if shift_next:
@@ -454,7 +458,7 @@ def cmd_pick_row(ctx, st):
             rot = choose_rot(ctx, seen, front, rear)
             ctx.log("  {} kostka {}: vidím {} -> {} (front={})".format(ctx.stamp(), i + 1, seen, rot, front))
             ctx.mech.goto(rot=rot)
-        drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"]), advance_v)
+        drive_mm(ctx, advance_len(ctx, picked + 1, pk["advance_mm"], extra_map), advance_v)
         picked += 1
         if picked in pk["shift_after"]:
             if shift_next:
@@ -493,7 +497,8 @@ def cmd_unload(ctx, st):
 
 def cmd_arm(ctx, st):
     if st.get("rot") or st.get("slot"):
-        ctx.mech.goto(rot=st.get("rot"), slot=st.get("slot"))
+        # extra: stupně navíc k posunu zásobníku (ve směru pohybu), např. jen při vykládce
+        ctx.mech.goto(rot=st.get("rot"), slot=st.get("slot"), extra=st.get("extra", 0))
     nudge = st.get("nudge")
     if nudge:
         ctx.mech.nudge(None if nudge is True else nudge)

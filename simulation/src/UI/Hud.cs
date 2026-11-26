@@ -4,7 +4,7 @@ namespace DominoSim;
 
 public partial class Hud : CanvasLayer
 {
-    public MissionController Mission;
+    public IMissionInfo Mission;
     public Main MainNode;
     Label _label;
 
@@ -23,13 +23,13 @@ public partial class Hud : CanvasLayer
         if (Mission == null) return;
         double t = Mission.SimTime;
         string timer = t <= MissionController.MatchTime ? $"{MissionController.MatchTime - t:0.0} s left" : $"+{t - MissionController.MatchTime:0.0} s over 90 s";
-        string last = Mission.JointLog.Count > 0 ? Mission.JointLog[^1].Trim() : "-";
+        string last = Mission.LastLine;
         _label.Text =
             $"Domino sim   t = {t:0.0} s   ({timer})   speed x{MainNode?.SpeedFactor ?? 1}\n" +
             $"State: {Mission.State}\n" +
             $"Carried: {Mission.CarriedText()}   Placed: {Mission.PlacedCount}/16\n" +
             $"Last joint: {last}\n" +
             $"{Mission.Summary()}\n" +
-            "[1/2/3/4] speed x1/x2/x4/x8   [T] top/orbit view   [F] follow robot   [R] restart   RMB drag orbit, wheel zoom";
+            "[1/2/3/4] speed x1/x2/x4/x8   [T] top/orbit view   [F] follow robot   [R] restart   [O] " + (Main.OursActive ? "back to sim mission" : "OUR mission (Python)") + "   RMB drag orbit, wheel zoom";
     }
 }
