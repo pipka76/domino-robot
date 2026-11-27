@@ -11,10 +11,11 @@ namespace DominoSim;
 ///  * HANDS at the very front (pick line x = PickX), one left, one right, 90° out of phase: rot CW or CCW
 ///    lowers one of them, NONE = both up. A crosswise piece reaching the pick line is caught and turned by
 ///    90° while the robot drives on (slot RIGHT + CCW or slot LEFT + CW = the right end goes in front).
-///  * NECK behind the hands: room for 2 pieces in a row. The pieces in the neck stand on the floor – when the
+///  * TURNING ZONE between the hands and the neck (what is left of the length: 365 mm − 3 pieces).
+///  * NECK behind it: room for 2 pieces in a row. The pieces in the neck stand on the floor – when the
 ///    robot drives forward they stay put, i.e. they move backwards relative to the robot, until they hit the
 ///    piece behind or the rear wall of the active magazine slot.
-///  * MAGAZINE behind the neck: 2 slots (LEFT / RIGHT) side by side, one piece each. The active slot lines up
+///  * MAGAZINE behind the neck, at the very rear of the robot: 2 slots (LEFT / RIGHT) side by side, one piece each. The active slot lines up
 ///    with the neck; a shift moves the magazine sideways (a piece in the slot moves with it).
 ///    So at most 4 pieces: 2 in the neck + 1 in each slot. Order of a row: 1 → slot R, 2 → slot L, 3 + 4 neck.
 ///  * Reversing: the pieces in the line (neck + active slot) stay on the floor and leave through the front;
@@ -23,11 +24,12 @@ namespace DominoSim;
 /// </summary>
 public partial class OurMechanism : Node3D
 {
-    public const float PickX = 0.175f;                     // front edge = hands
-    public const float NeckFrontX = PickX - 0.010f;        // neck entry
-    public const float NeckRearX = NeckFrontX - 2 * Domino.L;   // end of the neck = start of the magazine
-    public const float SlotRearX = NeckRearX - Domino.L;   // rear wall of a slot
-    public const float SlotPitch = 0.040f;                 // sideways distance of the two slots
+    // Geometry from data/robot_ours.json: the body runs from the magazine end (rear) to the hands (front).
+    public static float PickX => RobotSpec.BodyFront;                        // front edge = hands
+    public static float SlotRearX => RobotSpec.BodyRear + 0.004f;            // rear wall of a slot = end of the robot
+    public static float NeckRearX => SlotRearX + Domino.L;                   // end of the neck = start of the magazine
+    public static float NeckFrontX => NeckRearX + 2 * Domino.L;              // neck entry; between it and the hands the piece turns
+    public const float SlotPitch = 0.040f;                                   // sideways distance of the two slots
     public static float SlotX => (NeckRearX + SlotRearX) / 2f;
     /// <summary>Colour sensor: in front of the RIGHT hand (sensorAhead in robot_ours.json), sees the right half of a crosswise piece.</summary>
     public static Vector2 SensorLocal => new(PickX + RobotSpec.SensorAhead, 0.024f);
