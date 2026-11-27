@@ -89,10 +89,11 @@ public partial class ModeMenu : CanvasLayer
         var missions = ProgramFile.MissionNames();
         string active = ProgramFile.ActiveMission();
         if (active != null && missions.Remove(active)) missions.Insert(0, active);
+        if (missions.Remove("sim_demo")) missions.Insert(0, "sim_demo");   // ukázková jízda pro simulaci
         foreach (var m in missions)
         {
             string name = m;
-            _programs.AddItem($"Náš Python kód – mise {m}" + (m == active ? "   (active_mission)" : ""));
+            _programs.AddItem($"Náš Python kód – mise {m}" + (m == active ? "   (active_mission)" : m == "sim_demo" ? "   (ukázka pro simulaci)" : ""));
             _choices.Add(() => Start?.Invoke(Session.Mode.Ours, null, name));
         }
         foreach (var f in ProgramFile.SavedPrograms())

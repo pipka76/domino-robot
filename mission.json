@@ -126,6 +126,14 @@
   },
 
   "macros": {
+    "unload_sim": [
+      { "_": "Rychlá vykládka jen pro Godot simulaci (mise sim_demo): bez dorovnání zásobníku a čekání." },
+      { "cmd": "drive", "mm": -200, "speed": 400 },
+      { "cmd": "arm", "slot": "toggle", "extra": 400 },
+      { "cmd": "drive", "mm": 200, "speed": 400 },
+      { "cmd": "arm", "rot": "NONE" },
+      { "cmd": "drive", "mm": -400, "speed": 600 }
+    ],
     "to_bottom": [
       { "_": "Z místa vykládky A (robot míří nahoru) k levému dolnímu rohu: srovnat se zadkem o levou stěnu, pak dolů ke spodní řadě." },
       { "cmd": "turn", "deg": -90, "_": "míří doprava, zadek k levé stěně" },
@@ -166,6 +174,27 @@
   },
 
   "missions": {
+    "sim_demo": [
+      {"_": "=== Ukázková jízda pro Godot simulaci (na robotu se nepoužívá, active_mission zůstává main) ==="},
+      {"cmd": "pick_row", "row": "left", "count": 4, "chain_id": "A", "approach_speed": 280, "advance_speed": 350, "advance_extra_mm": {"4": 35}},
+      {"cmd": "drive", "mm": -40},
+      {"cmd": "curve", "deg": 90, "inner": 200, "outer": 600},
+      {"cmd": "drive", "mm": 500},
+      {"cmd": "turn", "deg": 90},
+      {"cmd": "drive", "mm": 615},
+      {"cmd": "unload", "chain_id": "A", "macro": "unload_sim"},
+      {"cmd": "turn", "deg": -90},
+      {"cmd": "drive", "mm": -599},
+      {"cmd": "turn", "deg": -90},
+      {"cmd": "drive", "mm": 438},
+      {"cmd": "pick_prepare", "row": "bottom", "count": 4, "chain_id": "B"},
+      {"cmd": "curve", "deg": 90, "inner": -50, "outer": 300, "s_per_90": 1.8},
+      {"cmd": "pick_row", "row": "bottom", "first_taken": true, "approach_speed": 230, "shift_extra": 300, "first_advance_mm": 10, "shift_overrun_mm": 0},
+      {"cmd": "drive", "mm": -32},
+      {"cmd": "curve", "deg": 90, "inner": -50, "outer": 300, "s_per_90": 1.8},
+      {"cmd": "drive", "mm": 439},
+      {"cmd": "unload", "chain_id": "B", "macro": "unload_sim"}
+    ],
     "main": [
       { "_": "=== 1. JÍZDA: levá řada shora dolů -> řetěz A k levému hornímu rohu žlutého pole ===" },
       { "_": "Start: robot nad levou řadou, míří DOLŮ podél řady." },

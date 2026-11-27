@@ -19,7 +19,7 @@ python3 main.py --mock test_bottom # konkrétní mise; --flip = kostky otočené
 → menu se 2 módy: **1** = jízda kódu s měřením času (náš Python: `-- --ours MISE`; záznam kroků: `-- --program SOUBOR`;
 Jiřího MissionController: `-- --theirs`), **2** = ruční jízda klávesnicí, pohyby se ukládají jako kroky `drive`/`turn`/`curve`
 do `simulation/programs/` (`-- --drive`). Headless: `--headless --fixed-fps 120 -- --ours main --mission`.
-Náš Python běží přes `hw_sim.py` (TCP 5577, lock-step), model mechanismu (ruce → krk na 2 kostky → zásobník 2 sloty po 1 kostce) v `simulation/src/Ours/OurMechanism.cs`;
+Ukázková jízda pro simulaci = mise `sim_demo` (+ makro `unload_sim`; na robot se nepoužívá, v Godotu ~89 s, řetěz 8 kostek). Náš Python běží přes `hw_sim.py` (TCP 5577, lock-step), model mechanismu (ruce → krk na 2 kostky → zásobník 2 sloty po 1 kostce) v `simulation/src/Ours/OurMechanism.cs`;
 `mechanism.py` hlásí stav přes `hw.arm_target`. Po změně C# `dotnet build` v `simulation/`.
 Po každé změně kódu/JSONu spustit aspoň `python3 main.py --mock` (validace + čas mise) a u dotčených
 testů i jejich misi. Simulace NEověřuje fyziku (mock vidí polovinu kostky s indexem 0, odražené světlo

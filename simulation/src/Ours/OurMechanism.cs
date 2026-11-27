@@ -10,7 +10,7 @@ namespace DominoSim;
 ///
 ///  * HANDS at the very front (pick line x = PickX), one left, one right, 90° out of phase: rot CW or CCW
 ///    lowers one of them, NONE = both up. A crosswise piece reaching the pick line is caught and turned by
-///    90° while the robot drives on (slot RIGHT + CCW or slot LEFT + CW = the right end goes in front).
+///    90° while the robot drives on (slot RIGHT + CCW or slot LEFT + CW = the left end, seen by the sensor, goes in front).
 ///  * TURNING ZONE between the hands and the neck (what is left of the length: 365 mm − 3 pieces).
 ///  * NECK behind it: room for 2 pieces in a row. The pieces in the neck stand on the floor – when the
 ///    robot drives forward they stay put, i.e. they move backwards relative to the robot, until they hit the
@@ -31,8 +31,8 @@ public partial class OurMechanism : Node3D
     public static float NeckFrontX => NeckRearX + 2 * Domino.L;              // neck entry; between it and the hands the piece turns
     public const float SlotPitch = 0.040f;                                   // sideways distance of the two slots
     public static float SlotX => (NeckRearX + SlotRearX) / 2f;
-    /// <summary>Colour sensor: in front of the RIGHT hand (sensorAhead in robot_ours.json), sees the right half of a crosswise piece.</summary>
-    public static Vector2 SensorLocal => new(PickX + RobotSpec.SensorAhead, 0.024f);
+    /// <summary>Colour sensor: at the LEFT hand (sensorAhead in robot_ours.json), sees the left half of a crosswise piece.</summary>
+    public static Vector2 SensorLocal => new(PickX + RobotSpec.SensorAhead, -0.024f);
 
     public Func<IEnumerable<Domino>> Candidates = () => Enumerable.Empty<Domino>();
     public Action<string> Log = _ => { };
@@ -47,7 +47,7 @@ public partial class OurMechanism : Node3D
 
     Domino _cap;
     Vector2 _capStart;
-    float _capPsi0, _capSign, _capTravel0, _capNeeded, _travel;
+    float _capPsi0, _capSign, _capTurn, _capTravel0, _capNeeded, _travel;
     Vector2 _lastPos;
     bool _hasLast;
     readonly List<Domino> _released = new();
@@ -82,7 +82,7 @@ public partial class OurMechanism : Node3D
         foreach (float z in new[] { -SlotPitch / 2f - hw, -SlotPitch / 2f + hw, SlotPitch / 2f - hw, SlotPitch / 2f + hw })
             Box(_magazine, new Vector3(Domino.L, 0.024f, 0.003f), new Vector3(SlotX, wy + 0.022f, z), wall);
         Box(_magazine, new Vector3(0.004f, 0.024f, SlotPitch + 2 * hw), new Vector3(SlotRearX - 0.002f, wy + 0.022f, 0), wall);
-        // Colour sensor in front of the right hand (black body, white lens pointing down).
+        // Colour sensor at the left hand (black body, white lens pointing down).
         var sensorPos = new Vector3(SensorLocal.X, 0.032f, SensorLocal.Y);
         Box(this, new Vector3(0.024f, 0.016f, 0.016f), sensorPos, new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.08f, 0.1f) });
         Box(this, new Vector3(0.008f, 0.002f, 0.008f), sensorPos + new Vector3(0, 0.009f, 0), new StandardMaterial3D { AlbedoColor = new Color(0.9f, 0.9f, 1f), EmissionEnabled = true, Emission = new Color(0.6f, 0.6f, 1f) });
@@ -92,9 +92,9 @@ public partial class OurMechanism : Node3D
         UpdateVisuals();
     }
 
-    // Which end of a caught piece ends up in front: slot RIGHT + CCW or slot LEFT + CW = the RIGHT end, i.e. the half
+    // Which end of a caught piece ends up in front: slot RIGHT + CCW or slot LEFT + CW = the LEFT end, i.e. the half
     // seen by the colour sensor (as verified on the robot, mission.json pick.seen_to_front).
-    bool LeftEndFront => !((Slot == "RIGHT" && Rot == "CCW") || (Slot == "LEFT" && Rot == "CW"));
+    bool LeftEndFront => (Slot == "RIGHT" && Rot == "CCW") || (Slot == "LEFT" && Rot == "CW");
 
     void UpdateVisuals()
     {
@@ -153,7 +153,7 @@ public partial class OurMechanism : Node3D
         {
             float t = Mathf.Clamp((_travel - _capTravel0) / _capNeeded, 0f, 1f);
             var local = new Vector2(Mathf.Lerp(_capStart.X, NeckFrontX - Domino.L / 2f, t), Mathf.Lerp(_capStart.Y, 0f, t));
-            float psi = _capPsi0 + _capSign * Mathf.Pi / 2f * t;
+            float psi = _capPsi0 + _capSign * _capTurn * t;
             if (t >= 1f)
             {
                 psi = Mathf.Abs(Geo.Wrap(psi)) < Mathf.Pi / 2f ? 0f : Mathf.Pi;
@@ -203,25 +203,35 @@ public partial class OurMechanism : Node3D
 
     bool Free(Domino d) => !d.Carried && d.Upright && d != _cap;
 
+    /// <summary>
+    /// A piece that gets under the front (between the hands and the neck entry) while a hand is down is caught and
+    /// turned in the hand's direction until it lies lengthwise: 90° for a crosswise piece on a straight run, less
+    /// for a piece the robot drives over at an angle (e.g. the first piece of a row taken by an arc).
+    /// </summary>
     void TryCapture(Vector2 pos, float th)
     {
-        var lateral = Geo.Right(th);
         foreach (var d in Candidates())
         {
             if (!Free(d)) continue;
             var local = Geo.Unrotate(d.Pos2 - pos, th);
-            if (local.X > PickX || local.X < PickX - 0.05f) continue;
-            if (Mathf.Abs(local.Y) > 0.035f) continue;
-            if (Mathf.Abs(Geo.Dir(d.Axis).Dot(lateral)) < 0.85f) continue; // must lie crosswise
+            if (local.X > PickX || local.X < NeckFrontX - 0.02f) continue;
+            if (Mathf.Abs(local.Y) > 0.045f) continue;
+            float psi0 = Geo.Wrap(d.Axis - th);
+            float sign = LeftEndFront ? 1f : -1f; // +θ = clockwise from above
+            // Turn in the hand's direction until lengthwise (psi = 0 or π).
+            float turn = Mathf.PosMod(-sign * psi0, Mathf.Pi);
+            if (turn > Mathf.Pi - 0.05f) turn = 0f;
+            if (turn < 0.05f && Mathf.Abs(local.Y) < 0.012f) continue; // lengthwise in the lane: TryIngest takes it
             _cap = d;
             d.SetCarried(true);
             _robot.AddCollisionExceptionWith(d);
             _capStart = local;
-            _capPsi0 = Geo.Wrap(d.Axis - th);
-            _capSign = LeftEndFront ? 1f : -1f; // +θ = clockwise from above
+            _capPsi0 = psi0;
+            _capSign = sign;
+            _capTurn = turn;
             _capTravel0 = _travel;
             _capNeeded = Mathf.Max(local.X - (NeckFrontX - Domino.L / 2f), 0.03f);
-            Log($"[sim] nabírám kostku #{d.Id} ({Rot}, slot {Slot})");
+            Log($"[sim] nabírám kostku #{d.Id} ({Rot}, slot {Slot}, otočí o {Mathf.RadToDeg(turn):0}°)");
             return;
         }
     }

@@ -81,7 +81,7 @@ Python errors are written to `simulation/ours_python.log`. The robot is `data/ro
 (365×220 mm, axle 175 mm behind the front, `"mechanism": "ours"` → `src/Ours/OurMechanism.cs`, used by all modes):
 - **hands** at the very front (pick line 175 mm ahead of the axle), left and right, 90° out of phase: `CW` / `CCW` lowers one,
   `NONE` none. A crosswise piece is caught and turned by 90° while the robot drives on
-  (slot RIGHT + CCW or slot LEFT + CW = the right end goes in front);
+  (slot RIGHT + CCW or slot LEFT + CW = the left end, seen by the sensor, goes in front);
 - **neck** behind the hands for 2 pieces in a row: the pieces stand on the floor, so they move backwards relative to the
   robot when it drives forward, until they hit the piece behind or the rear wall of the active slot;
 - **magazine** behind the neck: 2 slots (LEFT/RIGHT) side by side, 1 piece each; the active one lines up with the neck,
@@ -89,7 +89,7 @@ Python errors are written to `simulation/ours_python.log`. The robot is `data/ro
 - **reversing**: the neck + active slot stay on the floor and leave through the front; the other slot keeps its piece
   until a shift. Driving forward onto a piece lying lengthwise in the lane takes it back into the neck.
 The neck/magazine positions are estimated (neck right behind the hands, magazine right behind the neck).
-The colour sensor sits 35 mm in front of the **right** hand (24 mm right of the centre line) and sees the right half of a
+The colour sensor sits at the **left** hand (35 mm in front of the robot, 24 mm left of the centre line) and sees the left half of a
 crosswise piece – that half goes in front (`pick.seen_to_front`). It sees pieces only (floor = WHITE, reflected 17), no black lines.
 
 ## Structure

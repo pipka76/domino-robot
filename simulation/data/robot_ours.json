@@ -1,5 +1,5 @@
 {
-  "comment": "Náš robot (Metoděj). Kolize: tělo od konce zásobníku (190 mm za osou kol) po ruce (175 mm před osou), široké mezi vnitřními hranami kol (rozchod 162 mm − kolo 16 = 146 mm); kola venku (width = 178 přes kola). Stopa 2.9 deg kola na 1 deg robota. Barevný senzor 35 mm před předkem (210 od osy), před PRAVOU rukou (24 mm vpravo od středu) – vidí pravou polovinu kostky ležící napříč. Používá --ours.",
+  "comment": "Náš robot (Metoděj). Kolize: tělo od konce zásobníku (190 mm za osou kol) po ruce (175 mm před osou), široké mezi vnitřními hranami kol (rozchod 162 mm − kolo 16 = 146 mm); kola venku (width = 178 přes kola). Stopa 2.9 deg kola na 1 deg robota. Barevný senzor 35 mm před předkem (210 od osy), nad LEVOU rukou (24 mm vlevo od středu) – vidí levou polovinu kostky ležící napříč. Používá --ours.",
   "mechanism": "ours",
   "length": 365,
   "width": 178,

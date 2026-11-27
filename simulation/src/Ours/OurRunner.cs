@@ -138,6 +138,7 @@ public partial class OurRunner : Node, IMissionInfo
                 case "log":
                     LastLine = arg.Trim();
                     GD.Print($"[{SimTime,6:0.00}] {arg}");
+                    if (System.Environment.GetEnvironmentVariable("POSE") == "1") GD.Print($"         POSE x={Robot.Pos2.X * 1000:0} z={Robot.Pos2.Y * 1000:0} th={Mathf.RadToDeg(Robot.Theta):0}");
                     Reply("ok");
                     break;
                 case "done":
@@ -162,6 +163,9 @@ public partial class OurRunner : Node, IMissionInfo
         Robot.Stop();
         State = why;
         GD.Print($"=== [ours] {why} v {SimTime:0.0} s; {Summary()}");
+        if (System.Environment.GetEnvironmentVariable("POSE") == "1")
+            foreach (var d in Dominos.Where(d => !d.Carried && Layout.YellowRect.Grow(0.2f).HasPoint(d.Pos2)))
+                GD.Print($"         KOSTKA #{d.Id} [{PColors.Letter(d.C0)}{PColors.Letter(d.C1)}] x={d.Pos2.X * 1000:0} z={d.Pos2.Y * 1000:0} osa={Mathf.RadToDeg(d.Axis):0}");
         try { _cl?.Close(); _srv?.Stop(); } catch { }
         if (AutoQuit) GetTree().Quit();
     }
@@ -209,15 +213,5 @@ public partial class OurRunner : Node, IMissionInfo
 
     public int PlacedCount => Robot.Mech.Placed.Count;
 
-    public string Summary()
-    {
-        int inYellow = Dominos.Count(d => !d.Carried && d.Footprint.Corners().Any(c => Layout.YellowRect.HasPoint(c)));
-        int joints = 0;
-        var free = Dominos.Where(d => !d.Carried && d.Upright).ToList();
-        for (int i = 0; i < free.Count; i++)
-            for (int j = i + 1; j < free.Count; j++)
-                if (free[i].Pos2.DistanceTo(free[j].Pos2) < 0.13f && JointEvaluator.Evaluate(free[i].Pose, free[j].Pose).Valid)
-                    joints++;
-        return $"kostek ve žlutém={inYellow}, platných spojů={joints}";
-    }
+    public string Summary() => Scorer.Summary(Dominos, Layout);
 }
