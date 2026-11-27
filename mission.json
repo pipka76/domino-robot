@@ -192,7 +192,7 @@
       {"cmd": "pick_row", "row": "bottom", "first_taken": true, "approach_speed": 230, "shift_extra": 300, "first_advance_mm": 10, "shift_overrun_mm": 0},
       {"cmd": "drive", "mm": -32},
       {"cmd": "curve", "deg": 90, "inner": -50, "outer": 300, "s_per_90": 1.8},
-      {"cmd": "drive", "mm": 439},
+      {"cmd": "drive", "mm": 428},
       {"cmd": "unload", "chain_id": "B", "macro": "unload_sim"}
     ],
     "main": [

@@ -61,9 +61,14 @@ public partial class Domino : RigidBody3D
         {
             FreezeMode = FreezeModeEnum.Kinematic;
             Freeze = true;
+            // A carried piece is moved by the mechanism, not by physics: it must not shove pieces on the floor.
+            CollisionLayer = 0;
+            CollisionMask = 0;
         }
         else
         {
+            CollisionLayer = 1;
+            CollisionMask = 1;
             Freeze = false;
             LinearVelocity = Vector3.Zero;
             AngularVelocity = Vector3.Zero;
