@@ -43,6 +43,7 @@ public partial class OurRunner : Node, IMissionInfo
     public double SimTime { get; private set; }
     public string State { get; private set; } = "čekám na Python…";
     public string LastLine { get; private set; } = "-";
+    string _armLabel;
 
     TcpListener _srv;
     TcpClient _cl;
@@ -131,10 +132,18 @@ public partial class OurRunner : Node, IMissionInfo
                 case "arm":
                 {
                     var v = arg.Split(' ');
-                    Robot.Mech.SetState(v[0], v[1]);
+                    var m = Robot.Mech;
+                    string Side(string x) => x == "LEFT" ? "L" : "P";
+                    _armLabel = v[1] != m.Slot ? $"Posun zásobníku {Side(m.Slot)} → {Side(v[1])}"
+                              : v[0] != m.Rot ? $"Ruce {v[0]}" : "Dorovnání zásobníku";
+                    m.SetState(v[0], v[1]);
                     Reply("ok");
                     break;
                 }
+                case "busy":   // hw_sim.arm_move: motor C runs for this long (the robot stands)
+                    ActionStatus.Begin(_armLabel ?? "Motor C", double.Parse(arg, System.Globalization.CultureInfo.InvariantCulture), () => SimTime);
+                    Reply("ok");
+                    break;
                 case "log":
                     LastLine = arg.Trim();
                     GD.Print($"[{SimTime,6:0.00}] {arg}");

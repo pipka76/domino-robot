@@ -19,6 +19,9 @@ config/icon="res://icon.svg"
 
 window/size/viewport_width=1600
 window/size/viewport_height=1000
+window/size/mode=2
+window/size/window_width_override=2400
+window/size/window_height_override=1500
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
@@ -35,4 +38,4 @@ common/max_physics_steps_per_frame=16
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d=3

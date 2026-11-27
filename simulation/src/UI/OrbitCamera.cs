@@ -52,7 +52,7 @@ public partial class OrbitCamera : Camera3D
         if (_top)
         {
             Projection = ProjectionType.Orthogonal;
-            Size = FollowEnabled ? _dist * 0.35f : 1.85f;
+            Size = FollowEnabled ? _dist * 0.35f : 1.76f;
             LookAtFromPosition(Target + new Vector3(0, 3, 0), Target, Vector3.Forward);
         }
         else

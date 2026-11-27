@@ -137,27 +137,20 @@ public partial class ProgramRunner : SimDriver
         await M.StopAndSettle();
     }
 
-    public string StatusText()
-    {
-        double t = SimTime;
-        string timer = t <= MissionController.MatchTime ? $"zbývá {MissionController.MatchTime - t:0.0} s" : $"+{t - MissionController.MatchTime:0.0} s přes 90 s";
-        string cur = Finished ? "hotovo" : Index >= 0 && Index < Steps.Count ? $"{Index + 1}/{Steps.Count}: {StepExecutor.Describe(Steps[Index])}" : "start";
-        return $"MÓD 1 – přehrání programu '{Program?.Name}'   t = {t:0.00} s ({timer})\n" +
-               $"Krok {cur}" + (Skipped > 0 ? $"   (přeskočeno {Skipped})" : "") + "\n" +
-               $"Zásobník: {CarriedText()}\n" +
-               Scorer.Summary(Dominos, Layout);
-    }
+    public string InfoText() =>
+        Finished ? (Skipped > 0 ? $"Hotovo  ·  přeskočeno {Skipped} kroků" : "Hotovo")
+        : Index >= 0 && Index < Steps.Count ? $"Krok {Index + 1}/{Steps.Count}   {StepExecutor.Describe(Steps[Index])}" : "Start";
 
     public string SideText()
     {
-        var sb = new StringBuilder("Kroky:\n");
+        var sb = new StringBuilder();
         int from = Math.Max(0, Math.Min(Index - 12, Steps.Count - 30));
         for (int i = from; i < Math.Min(Steps.Count, from + 30); i++)
         {
             string mark = i == Index && !Finished ? "▶" : " ";
             string time = i < StepTimes.Count ? $"{StepTimes[i],5:0.00} s" : "";
-            sb.Append($"{mark}{i + 1,3}. {StepExecutor.Describe(Steps[i]),-24} {time}\n");
+            sb.Append($"{mark}{i + 1,3}  {StepExecutor.Describe(Steps[i]),-22} {time}\n");
         }
-        return sb.ToString();
+        return sb.ToString().TrimEnd();
     }
 }

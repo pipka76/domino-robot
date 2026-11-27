@@ -38,11 +38,23 @@ public partial class Main : Node3D
     string _shotPath;
     double _shotTime;
 
-    const string PlayHelp = "[1/2/3/4] rychlost x1/x2/x4/x8   [R] znovu   [Esc] menu   [T] pohled shora/orbit   [F] sledovat robota   pravé tl. myši = orbit, kolečko = zoom";
+    const string PlayHelp =
+        "1 2 3 4      rychlost ×1 ×2 ×4 ×8\n" +
+        "R            znovu\n" +
+        "Esc          menu\n" +
+        "T            pohled shora / šikmo\n" +
+        "F            sledovat robota\n" +
+        "pravé tl.    otáčení pohledu, kolečko = zoom";
     const string DriveHelp =
-        "[↑↓←→ / WASD] jízda, otáčení, ↑+←/→ oblouk   [Shift] pomalu (oblouk kolem kola)   [Q/E] otočit přesně o 90° vlevo/vpravo\n" +
-        "[J/K/L] ruce CW / NONE / CCW   [H] posun zásobníku   [Mezerník] vyložit (makro unload)   [Backspace] zpět (smaže poslední krok)\n" +
-        "[Ctrl+S] uložit   [Enter] uložit a přehrát v módu 1   [R] začít znovu   [Esc] menu   [T/F] kamera";
+        "šipky, WASD  jízda a otáčení, vpřed + vlevo/vpravo = oblouk\n" +
+        "Shift        pomalu (oblouk kolem kola)\n" +
+        "Q / E        otočit přesně o 90° vlevo / vpravo\n" +
+        "J / K / L    ruce CW / NONE / CCW\n" +
+        "H            posun zásobníku\n" +
+        "Mezerník     vyložit (makro unload)\n" +
+        "Backspace    zpět (smaže poslední krok)\n" +
+        "Ctrl+S       uložit,  Enter = uložit a přehrát\n" +
+        "R            začít znovu,  Esc = menu,  T / F = kamera";
 
     public override void _Ready()
     {
@@ -159,7 +171,8 @@ public partial class Main : Node3D
                 var mission = new MissionController { Robot = robot, Dominos = dominos, Layout = layout, AutoQuit = args.Contains("--mission") };
                 AddChild(mission);
                 _simTime = () => mission.SimTime;
-                AddChild(new Hud { TextFn = () => InfoText("MÓD 1 – vestavěná autonomní strategie", mission), Help = PlayHelp });
+                AddChild(MakeHud("Autonomní strategie", () => mission.SimTime, robot, dominos, layout, PlayHelp,
+                    info: () => mission.State, mech: () => "nese: " + mission.CarriedText()));
                 break;
             }
             case Session.Mode.Ours:
@@ -172,7 +185,8 @@ public partial class Main : Node3D
                 };
                 AddChild(runner);
                 _simTime = () => runner.SimTime;
-                AddChild(new Hud { TextFn = () => InfoText($"MÓD 1 – náš Python kód, mise '{Session.OursMission}'", runner), Help = PlayHelp });
+                AddChild(MakeHud($"Náš kód  ·  {Session.OursMission}", () => runner.SimTime, robot, dominos, layout, PlayHelp,
+                    info: () => runner.State == "běží" ? null : runner.State, mech: robot.Mech.ShortText));
                 break;
             }
             case Session.Mode.Play:
@@ -180,7 +194,8 @@ public partial class Main : Node3D
                 var runner = new ProgramRunner { Robot = robot, Dominos = dominos, Layout = layout, Program = Session.Program, AutoQuit = args.Contains("--quit") };
                 AddChild(runner);
                 _simTime = () => runner.SimTime;
-                AddChild(new Hud { TextFn = () => runner.StatusText() + $"   rychlost x{SpeedFactor}", SideFn = runner.SideText, Help = PlayHelp });
+                AddChild(MakeHud($"Záznam  ·  {Session.Program?.Name}", () => runner.SimTime, robot, dominos, layout, PlayHelp,
+                    info: runner.InfoText, mech: robot.Mech != null ? robot.Mech.ShortText : null, side: runner.SideText));
                 break;
             }
             case Session.Mode.Drive:
@@ -188,23 +203,21 @@ public partial class Main : Node3D
                 _driver = new ManualDriver { Robot = robot, Dominos = dominos, Layout = layout, MainNode = this };
                 AddChild(_driver);
                 _simTime = () => _driver.SimTime;
-                AddChild(new Hud { TextFn = _driver.StatusText, SideFn = _driver.SideText, Help = DriveHelp });
+                // The timer shows how long the recorded program takes (pauses between movements are not recorded).
+                AddChild(MakeHud("Ruční jízda", () => _driver.MoveTime, robot, dominos, layout, DriveHelp,
+                    info: _driver.InfoText, mech: robot.Mech != null ? robot.Mech.ShortText : null, side: _driver.SideText));
                 break;
             }
         }
         GD.Print($"Domino sim started. mode={Session.Current} round2={round2} seed={seed}");
     }
 
-    string InfoText(string title, IMissionInfo m)
+    Hud MakeHud(string title, Func<double> time, Robot robot, System.Collections.Generic.List<Domino> dominos, FieldLayout layout,
+        string help, Func<string> info = null, Func<string> mech = null, Func<string> side = null) => new()
     {
-        double t = m.SimTime;
-        string timer = t <= MissionController.MatchTime ? $"zbývá {MissionController.MatchTime - t:0.0} s" : $"+{t - MissionController.MatchTime:0.0} s přes 90 s";
-        return $"{title}   t = {t:0.0} s   ({timer})   rychlost x{SpeedFactor}\n" +
-               $"Stav: {m.State}\n" +
-               $"Zásobník: {m.CarriedText()}   Položeno: {m.PlacedCount}/16\n" +
-               $"Poslední: {m.LastLine}\n" +
-               m.Summary();
-    }
+        Title = title, TimeFn = time, SpeedFn = () => SpeedFactor, InfoFn = info, MechFn = mech, SideFn = side,
+        Help = help, Dominos = dominos, Layout = layout, Robot = robot, Camera = _cam,
+    };
 
     static int ArgInt(System.Collections.Generic.List<string> args, string key, int def)
     {

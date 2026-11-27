@@ -306,27 +306,29 @@ public partial class ManualDriver : SimDriver
         string json = ProgramFile.StepsToJson(p.Steps, "");
         DisplayServer.ClipboardSet(json);
         GD.Print("Kroky (zkopírováno do schránky):\n" + json);
-        Status = $"uloženo: {SavedPath} (kroky i ve schránce)";
+        Status = $"Uloženo: programs/{System.IO.Path.GetFileName(SavedPath)} (kroky i ve schránce)";
         Log("Uloženo do " + SavedPath);
         return SavedPath;
     }
 
-    public string StatusText()
+    public string InfoText()
     {
-        string seg = _replaying ? "přehrávám záznam…" : _busy != null ? "otáčím…" : _settling ? "zastavuji…" : _seg.Kind != Kind.None ? $"{_seg.Kind} {(_seg.Sign > 0 ? "+" : "-")}{(_seg.Slow ? " pomalu" : "")}" : "stojí";
-        float hdg = -Mathf.RadToDeg(Geo.Wrap(Robot.Theta - Main.StartHeading));
-        return $"MÓD 2 – ruční jízda se záznamem   kroků: {Steps.Count}   čas jízdy (bez čekání) ≈ {MoveTime:0.0} s\n" +
-               $"Robot: {seg}   x = {Robot.Pos2.X * 1000:0} mm, z = {Robot.Pos2.Y * 1000:0} mm, směr od startu {hdg:+0;-0}° (+ = doleva)\n" +
-               $"Mechanismus: {CarriedText()}\n" +
-               Scorer.Summary(Dominos, Layout) + (Status != "" ? $"\n{Status}" : "");
+        string seg = _replaying ? "přehrávám záznam…" : _settling ? "zastavuji…" : _seg.Kind switch
+        {
+            Kind.Drive => _seg.Sign > 0 ? "jede vpřed" : "couvá",
+            Kind.Turn => _seg.Sign > 0 ? "otáčí se doleva" : "otáčí se doprava",
+            Kind.Curve => _seg.Sign > 0 ? "oblouk doleva" : "oblouk doprava",
+            _ => "",
+        };
+        string s = $"Záznam: {Steps.Count} kroků" + (seg != "" ? $"   ·   {seg}" : "");
+        return Status != "" ? s + "\n" + Status : s;
     }
 
     public string SideText()
     {
-        var sb = new StringBuilder("Zaznamenané kroky:\n");
+        var sb = new StringBuilder();
         int from = Math.Max(0, Steps.Count - 30);
-        for (int i = from; i < Steps.Count; i++) sb.Append($"{i + 1,3}. {StepExecutor.Describe(Steps[i])}\n");
-        if (Steps.Count == 0) sb.Append("  (zatím nic)\n");
-        return sb.ToString();
+        for (int i = from; i < Steps.Count; i++) sb.Append($"{i + 1,3}  {StepExecutor.Describe(Steps[i])}\n");
+        return sb.ToString().TrimEnd();
     }
 }

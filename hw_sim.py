@@ -126,7 +126,9 @@ class SimHardware:
 
     def arm_move(self, deg, speed, tol=15, stall_s=None, extra_wait_s=None):
         self.arm_total += abs(deg)
-        self.sleep(abs(deg) / float(min(abs(speed), ARM_MAX_DEG_S)) + 0.05)
+        t = abs(deg) / float(min(abs(speed), ARM_MAX_DEG_S)) + 0.05
+        self._req("busy {:.3f}".format(t))  # simulátor ukáže odpočet u robota
+        self.sleep(t)
         return deg
 
     # --- ostatní ---

@@ -95,13 +95,12 @@ public sealed class StepExecutor
                     F(st, "s_per_90", DriveConfig.CurveSPer90));
                 return true;
             case "wait":
-                await _m.Wait(F(st, "s", 0));
+                await Busy("Čekání", F(st, "s", 0));
                 return true;
             case "arm":
             {
                 var mech = _r.Mech;
                 if (mech == null) return false;
-                double t = 0;
                 string rot = S(st, "rot", null)?.ToUpperInvariant(), slot = S(st, "slot", null)?.ToUpperInvariant();
                 if (slot == "TOGGLE") slot = mech.Slot == "LEFT" ? "RIGHT" : "LEFT";
                 if (slot != null && slot != mech.Slot)
@@ -110,22 +109,24 @@ public sealed class StepExecutor
                     string end = slot == "LEFT" ? "CW" : "CCW";
                     float deg = DriveConfig.Transitions.GetValueOrDefault($"{mech.Rot},{mech.Slot}>{end},{slot}", 5000f);
                     deg = Mathf.Abs(deg) + DriveConfig.ShiftExtra.GetValueOrDefault(slot, 0f) + F(st, "extra", 0);
-                    t += deg / DriveConfig.ShiftSpeed;
+                    string from = mech.Slot;
                     mech.SetState(end, slot);
+                    await Busy($"Posun zásobníku {(from == "LEFT" ? "L" : "P")} → {(slot == "LEFT" ? "L" : "P")}", deg / DriveConfig.ShiftSpeed);
                 }
                 if (rot != null && rot != mech.Rot)
                 {
-                    t += Mathf.Abs(Pos(rot) - Pos(mech.Rot)) / DriveConfig.ArmSpeed;
+                    float t = Mathf.Abs(Pos(rot) - Pos(mech.Rot)) / DriveConfig.ArmSpeed;
                     mech.SetState(rot, null);
+                    await Busy($"Ruce {rot}", t);
                 }
                 if (st["nudge"] is JsonValue nv && !(nv.TryGetValue(out bool nb) && !nb))
                 {
                     string end = mech.Slot == "LEFT" ? "CW" : "CCW";
                     float extra = nv.TryGetValue(out double nd) ? (float)nd : DriveConfig.NudgeDeg;
-                    t += (Mathf.Abs(Pos(end) - Pos(mech.Rot)) + extra) / DriveConfig.ShiftSpeed + 0.3;
+                    float t = (Mathf.Abs(Pos(end) - Pos(mech.Rot)) + extra) / DriveConfig.ShiftSpeed + 0.3f;
                     mech.SetState(end, null);
+                    await Busy("Dorovnání zásobníku", t);
                 }
-                await _m.Wait(t);
                 return true;
             }
             case "unload":
@@ -138,6 +139,13 @@ public sealed class StepExecutor
             default:
                 return false;
         }
+    }
+
+    /// <summary>Standing still for a while: shown as a countdown next to the robot.</summary>
+    async Task Busy(string label, double seconds)
+    {
+        ActionStatus.Begin(label, seconds, _now);
+        await _m.Wait(seconds);
     }
 
     static float Pos(string rot) => DriveConfig.RotPositions.GetValueOrDefault(rot ?? "NONE", 0f);

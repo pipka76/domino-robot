@@ -6,7 +6,15 @@ namespace DominoSim;
 /// <summary>Indicative score of whatever lies in the yellow area: longest chain of valid joints (n² + perpendicular joints).</summary>
 public static class Scorer
 {
+    public readonly record struct Result(int InYellow, int Chain, int Perp, int Points);
+
     public static string Summary(IEnumerable<Domino> dominos, FieldLayout layout)
+    {
+        var r = Score(dominos, layout);
+        return $"ve žlutém {r.InYellow} kostek, nejdelší platný řetěz {r.Chain} (≈{r.Points} b. vč. {r.Perp} kolmých)";
+    }
+
+    public static Result Score(IEnumerable<Domino> dominos, FieldLayout layout)
     {
         var inner = layout.YellowInner;
         var all = dominos.Where(d => !d.Carried).ToList();
@@ -37,6 +45,6 @@ public static class Scorer
         }
         for (int i = 0; i < n; i++) { used[i] = true; Dfs(i, 1, 0); used[i] = false; }
         int pts = bestLen >= 2 ? bestLen * bestLen + bestPerp : 0;
-        return $"ve žlutém {touching} kostek, nejdelší platný řetěz {bestLen} (≈{pts} b. vč. {bestPerp} kolmých)";
+        return new Result(touching, bestLen, bestPerp, pts);
     }
 }

@@ -262,6 +262,21 @@ public partial class OurMechanism : Node3D
         d.GlobalTransform = new Transform3D(Geo.YawBasis(th + psi), Geo.V3(_robot.LocalToField(local), Domino.H / 2f));
     }
 
+    /// <summary>One line for the HUD: hands, neck (2 places) and the two magazine slots (active one in brackets).</summary>
+    public string ShortText()
+    {
+        int neck = _line.Count(p => p.x >= NeckRearX) + (_cap != null ? 1 : 0);
+        bool activeFull = _line.Any(p => p.x < NeckRearX);
+        string other = Slot == "LEFT" ? "RIGHT" : "LEFT";
+        bool otherFull = _parked[other] != null;
+        string Sq(bool b) => b ? "■" : "□";
+        string Name(string s) => s == "LEFT" ? "L" : "P";
+        string neckS = new string('■', Math.Min(neck, 2)) + new string('□', Math.Max(0, 2 - neck));
+        string a = $"[{Name(Slot)}{Sq(activeFull)}]", b = $" {Name(other)}{Sq(otherFull)} ";
+        string slots = Slot == "LEFT" ? a + b : b + a;
+        return $"ruce {Rot,-4}  krk {neckS}  zásobník {slots.Trim()}";
+    }
+
     public string Text()
     {
         string P(Domino d) => $"#{d.Id}[{PColors.Letter(d.C0)}{PColors.Letter(d.C1)}]";
