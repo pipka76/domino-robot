@@ -38,7 +38,6 @@ public partial class OurRunner : Node, IMissionInfo
     public int Port = 5577;
 
     // Sensor / mechanism geometry (robot frame: x forward, z right; metres).
-    static Vector2 SensorLocal => OurMechanism.SensorLocal;
 
     public double SimTime { get; private set; }
     public string State { get; private set; } = "čekám na Python…";
@@ -52,6 +51,8 @@ public partial class OurRunner : Node, IMissionInfo
     double _wake = -1;          // sim time at which the pending sleep ends; <0 = Python is not sleeping
     bool _done;
     float _unwrapped, _lastTheta;
+    /// <summary>What the Python code reads from the gyro: degrees from the start, + = left (CCW).</summary>
+    public float GyroDeg => -Mathf.RadToDeg(_unwrapped);
 
     public override void _Ready()
     {
@@ -196,25 +197,7 @@ public partial class OurRunner : Node, IMissionInfo
 
     // ------------------------------------------------------------------ sensor
 
-    (string name, int refl) SensorColour()
-    {
-        var p = Robot.LocalToField(SensorLocal);
-        foreach (var d in Dominos)
-        {
-            if (d.Carried) continue;
-            var c = d.ColorAt(p);
-            if (c == PColor.None) continue;
-            return c switch
-            {
-                PColor.Red => ("RED", 40),
-                PColor.Yellow => ("YELLOW", 58),
-                PColor.Green => ("GREEN", 8),
-                PColor.Blue => ("BLUE", 8),
-                _ => ("BLACK", 5),
-            };
-        }
-        return ("WHITE", 17); // podlaha (reálný senzor ji čte jako GREEN, ale odražené světlo ~17)
-    }
+    (string name, int refl) SensorColour() => OurMechanism.ReadColour(Robot, Dominos);
 
     // ------------------------------------------------------------------ HUD
 

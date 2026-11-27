@@ -185,8 +185,10 @@ public partial class Main : Node3D
                 };
                 AddChild(runner);
                 _simTime = () => runner.SimTime;
-                AddChild(MakeHud($"Náš kód  ·  {Session.OursMission}", () => runner.SimTime, robot, dominos, layout, PlayHelp,
-                    info: () => runner.State == "běží" ? null : runner.State, mech: robot.Mech.ShortText));
+                var hud = MakeHud($"Náš kód  ·  {Session.OursMission}", () => runner.SimTime, robot, dominos, layout, PlayHelp,
+                    info: () => runner.State == "běží" ? null : runner.State, mech: robot.Mech.ShortText);
+                hud.GyroFn = () => runner.GyroDeg;   // exactly what the Python code reads
+                AddChild(hud);
                 break;
             }
             case Session.Mode.Play:

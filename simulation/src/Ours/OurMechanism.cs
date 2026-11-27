@@ -34,6 +34,27 @@ public partial class OurMechanism : Node3D
     /// <summary>Colour sensor: at the LEFT hand (sensorAhead in robot_ours.json), sees the left half of a crosswise piece.</summary>
     public static Vector2 SensorLocal => new(PickX + RobotSpec.SensorAhead, -0.024f);
 
+    /// <summary>Colour sensor reading (name as the Brian sensor, reflected light) – what the Python code gets.</summary>
+    public static (string name, int refl) ReadColour(Robot robot, IEnumerable<Domino> dominos)
+    {
+        var p = robot.LocalToField(SensorLocal);
+        foreach (var d in dominos)
+        {
+            if (d.Carried) continue;
+            var c = d.ColorAt(p);
+            if (c == PColor.None) continue;
+            return c switch
+            {
+                PColor.Red => ("RED", 40),
+                PColor.Yellow => ("YELLOW", 58),
+                PColor.Green => ("GREEN", 8),
+                PColor.Blue => ("BLUE", 8),
+                _ => ("BLACK", 5),
+            };
+        }
+        return ("WHITE", 17); // podlaha (reálný senzor ji čte jako GREEN, ale odražené světlo ~17)
+    }
+
     public Func<IEnumerable<Domino>> Candidates = () => Enumerable.Empty<Domino>();
     public Action<string> Log = _ => { };
 

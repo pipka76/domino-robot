@@ -21,6 +21,8 @@ public partial class Hud : CanvasLayer
     public FieldLayout Layout;
     public Robot Robot;
     public Camera3D Camera;
+    /// <summary>Gyro as the robot code sees it (degrees from the start, + = left). Null = computed from the robot's heading.</summary>
+    public Func<float> GyroFn;
 
     static readonly Color PanelBg = new(0.08f, 0.09f, 0.11f, 0.82f);
     static readonly Color Muted = new(0.62f, 0.66f, 0.72f);
@@ -33,6 +35,12 @@ public partial class Hud : CanvasLayer
     StyleBoxFlat _matchFill;
     PanelContainer _sidePanel, _helpPanel, _act;
     Scorer.Result _sc;
+    ColorRect _swatch;
+    Label _colour, _gyro;
+    GyroDial _dial;
+    Control _sensors;
+    float _gyroUnwrapped, _lastTheta;
+    bool _hasTheta;
     double _scoreAge = 99;
 
     static StyleBoxFlat Box(Color bg, int radius = 10, int pad = 14) => new()
@@ -88,6 +96,25 @@ public partial class Hud : CanvasLayer
         _scoreSub = L(v, 14, Muted);
         _info = L(v, 15);
         _mech = L(v, 14, Muted, mono);
+
+        // Sensors: colour sensor (swatch + name + reflected light) and gyro (dial + degrees).
+        var sensors = new VBoxContainer();
+        sensors.AddThemeConstantOverride("separation", 6);
+        v.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+        v.AddChild(sensors);
+        _sensors = sensors;
+        var colRow = new HBoxContainer();
+        colRow.AddThemeConstantOverride("separation", 10);
+        sensors.AddChild(colRow);
+        _swatch = new ColorRect { CustomMinimumSize = new Vector2(22, 22), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        colRow.AddChild(_swatch);
+        _colour = L(colRow, 16);
+        var gyroRow = new HBoxContainer();
+        gyroRow.AddThemeConstantOverride("separation", 10);
+        sensors.AddChild(gyroRow);
+        _dial = new GyroDial { CustomMinimumSize = new Vector2(22, 22), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        gyroRow.AddChild(_dial);
+        _gyro = L(gyroRow, 16);
 
         // Step list on the right.
         _sidePanel = new PanelContainer();
@@ -147,6 +174,7 @@ public partial class Hud : CanvasLayer
         }
         _score.Text = _sc.Chain >= 2 ? $"Řetěz {_sc.Chain}  ·  {_sc.Points} b." : "Řetěz –";
         _scoreSub.Text = $"ve žlutém {_sc.InYellow} kostek" + (_sc.Perp > 0 ? $", {_sc.Perp}× kolmý spoj" : "");
+        UpdateSensors();
         Set(_info, InfoFn?.Invoke());
         Set(_mech, MechFn?.Invoke());
 
@@ -175,6 +203,55 @@ public partial class Hud : CanvasLayer
             var p = Camera.UnprojectPosition(Robot.GlobalPosition + new Vector3(0, 0.15f, 0));
             _act.ResetSize();
             _act.Position = (p - new Vector2(_act.Size.X / 2f, _act.Size.Y + 70)).Clamp(Vector2.Zero, vp - _act.Size);
+        }
+    }
+
+    static readonly System.Collections.Generic.Dictionary<string, (string cz, Color c)> ColourNames = new()
+    {
+        ["RED"] = ("červená", PColors.ToColor(PColor.Red)),
+        ["GREEN"] = ("zelená", PColors.ToColor(PColor.Green)),
+        ["BLUE"] = ("modrá", PColors.ToColor(PColor.Blue)),
+        ["YELLOW"] = ("žlutá", PColors.ToColor(PColor.Yellow)),
+        ["BLACK"] = ("černá", PColors.ToColor(PColor.Black)),
+        ["WHITE"] = ("podlaha", new Color(0.92f, 0.92f, 0.92f)),
+    };
+
+    void UpdateSensors()
+    {
+        _sensors.Visible = Robot != null;
+        if (Robot == null) return;
+        // Gyro: unwrap the heading from the start of the run, + = left (counter-clockwise), like the robot's gyro.
+        float th = Robot.Theta;
+        if (_hasTheta) _gyroUnwrapped += Geo.Wrap(th - _lastTheta);
+        _lastTheta = th;
+        _hasTheta = true;
+        float gyro = GyroFn?.Invoke() ?? -Mathf.RadToDeg(_gyroUnwrapped);
+        _gyro.Text = $"Gyro  {gyro:+0.0;-0.0;0.0}°";
+        _dial.Deg = gyro;
+        _dial.QueueRedraw();
+
+        bool hasSensor = Robot.Mech != null && Dominos != null;
+        _swatch.GetParent<Control>().Visible = hasSensor;
+        if (!hasSensor) return;
+        var (name, refl) = OurMechanism.ReadColour(Robot, Dominos);
+        var (cz, col) = ColourNames.TryGetValue(name, out var v) ? v : (name, Colors.Gray);
+        _swatch.Color = col;
+        _colour.Text = name == "WHITE" ? $"Senzor  bez kostky   odraz {refl}" : $"Senzor  {cz}   odraz {refl}";
+        _colour.AddThemeColorOverride("font_color", name == "WHITE" ? Muted : Colors.White);
+    }
+
+    /// <summary>Small dial: the needle shows the gyro angle (0 = up, + = turned left).</summary>
+    partial class GyroDial : Control
+    {
+        public float Deg;
+        public override void _Draw()
+        {
+            var c = Size / 2f;
+            float r = Mathf.Min(c.X, c.Y) - 1;
+            DrawArc(c, r, 0, Mathf.Tau, 32, Muted, 1.5f, true);
+            float a = Mathf.DegToRad(-90 - Deg);   // screen: 0° = up, + = counter-clockwise
+            DrawLine(c, c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (r - 1), Accent, 2.5f, true);
+            DrawCircle(c, 2f, Accent);
         }
     }
 
