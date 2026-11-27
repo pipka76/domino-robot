@@ -84,6 +84,14 @@ public partial class ModeMenu : CanvasLayer
         AddChild(_dialog);
     }
 
+    int _autoPick = -1, _frames;
+    public override void _Process(double delta)
+    {
+        // Ladění: SIM_MENU_PICK=n stiskne po startu "Spustit program" s n-tou položkou.
+        if (_autoPick < 0 && int.TryParse(System.Environment.GetEnvironmentVariable("SIM_MENU_PICK"), out int n)) _autoPick = n;
+        if (_autoPick >= 0 && ++_frames == 10) { _programs.Selected = _autoPick; OnPlay(); }
+    }
+
     void FillPrograms()
     {
         var missions = ProgramFile.MissionNames();
