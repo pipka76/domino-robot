@@ -89,7 +89,8 @@ Python errors are written to `simulation/ours_python.log`. The robot is `data/ro
 - **reversing**: the neck + active slot stay on the floor and leave through the front; the other slot keeps its piece
   until a shift. Driving forward onto a piece lying lengthwise in the lane takes it back into the neck.
 The neck/magazine positions are estimated (neck right behind the hands, magazine right behind the neck).
-The sensor sees pieces only (floor = WHITE, reflected 17), no black lines.
+The colour sensor sits 35 mm in front of the **right** hand (24 mm right of the centre line) and sees the right half of a
+crosswise piece – that half goes in front (`pick.seen_to_front`). It sees pieces only (floor = WHITE, reflected 17), no black lines.
 
 ## Structure
 

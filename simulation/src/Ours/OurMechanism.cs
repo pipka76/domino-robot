@@ -29,6 +29,8 @@ public partial class OurMechanism : Node3D
     public const float SlotRearX = NeckRearX - Domino.L;   // rear wall of a slot
     public const float SlotPitch = 0.040f;                 // sideways distance of the two slots
     public static float SlotX => (NeckRearX + SlotRearX) / 2f;
+    /// <summary>Colour sensor: in front of the RIGHT hand (sensorAhead in robot_ours.json), sees the right half of a crosswise piece.</summary>
+    public static Vector2 SensorLocal => new(PickX + RobotSpec.SensorAhead, 0.024f);
 
     public Func<IEnumerable<Domino>> Candidates = () => Enumerable.Empty<Domino>();
     public Action<string> Log = _ => { };
@@ -78,14 +80,18 @@ public partial class OurMechanism : Node3D
         foreach (float z in new[] { -SlotPitch / 2f - hw, -SlotPitch / 2f + hw, SlotPitch / 2f - hw, SlotPitch / 2f + hw })
             Box(_magazine, new Vector3(Domino.L, 0.024f, 0.003f), new Vector3(SlotX, wy + 0.022f, z), wall);
         Box(_magazine, new Vector3(0.004f, 0.024f, SlotPitch + 2 * hw), new Vector3(SlotRearX - 0.002f, wy + 0.022f, 0), wall);
+        // Colour sensor in front of the right hand (black body, white lens pointing down).
+        var sensorPos = new Vector3(SensorLocal.X, 0.032f, SensorLocal.Y);
+        Box(this, new Vector3(0.024f, 0.016f, 0.016f), sensorPos, new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.08f, 0.1f) });
+        Box(this, new Vector3(0.008f, 0.002f, 0.008f), sensorPos + new Vector3(0, 0.009f, 0), new StandardMaterial3D { AlbedoColor = new Color(0.9f, 0.9f, 1f), EmissionEnabled = true, Emission = new Color(0.6f, 0.6f, 1f) });
         // Hands.
         _handL = Box(this, new Vector3(0.012f, 0.03f, 0.03f), Vector3.Zero, orange);
         _handR = Box(this, new Vector3(0.012f, 0.03f, 0.03f), Vector3.Zero, orange);
         UpdateVisuals();
     }
 
-    // Which end of a caught piece ends up in front. Checked against mission main (chain A joints valid with
-    // pick.physical_order [1,2,3,4]): slot RIGHT + CCW or slot LEFT + CW = the RIGHT end goes in front.
+    // Which end of a caught piece ends up in front: slot RIGHT + CCW or slot LEFT + CW = the RIGHT end, i.e. the half
+    // seen by the colour sensor (as verified on the robot, mission.json pick.seen_to_front).
     bool LeftEndFront => !((Slot == "RIGHT" && Rot == "CCW") || (Slot == "LEFT" && Rot == "CW"));
 
     void UpdateVisuals()

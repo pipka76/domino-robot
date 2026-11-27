@@ -38,7 +38,7 @@ public partial class OurRunner : Node, IMissionInfo
     public int Port = 5577;
 
     // Sensor / mechanism geometry (robot frame: x forward, z right; metres).
-    static readonly Vector2 SensorLocal = new(0.210f, -0.024f); // left side, sees one half of a crosswise piece
+    static Vector2 SensorLocal => OurMechanism.SensorLocal;
 
     public double SimTime { get; private set; }
     public string State { get; private set; } = "čekám na Python…";
