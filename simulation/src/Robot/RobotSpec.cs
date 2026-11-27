@@ -10,6 +10,8 @@ public static class RobotSpec
     public static float CornerRadius = 0f, SensorAhead = 0.05f;
     public static float WheelRadius = 0.028f, WheelWidth = 0.016f, GroundClearance = 0.03f, LaneHalfWidth = 0.05f;
     public static string Source = "defaults";
+    /// <summary>"ours" = OurMechanism (hands, neck, 2-slot magazine); otherwise the arms + belly Intake.</summary>
+    public static string Mechanism = "";
 
     public static float BodyFront => AxleFromFront;
     public static float BodyRear => AxleFromFront - Length;
@@ -54,6 +56,7 @@ public static class RobotSpec
         LaneHalfWidth = Mm("laneHalfWidth", LaneHalfWidth);
         CornerRadius = Mm("cornerRadius", 0f);
         SensorAhead = Mm("sensorAhead", 0.05f);
+        Mechanism = r.TryGetProperty("mechanism", out var mech) ? mech.GetString() : "";
         Source = resPath;
     }
 

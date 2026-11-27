@@ -1,14 +1,13 @@
 {
-  "_": "Ukázkový záznam: ze startu dolů podél levé řady, nabrat 2 kostky levým ramenem, obloukem doprava do žlutého pole, vyložit.",
+  "_": "Ukázkový záznam: ze startu dolů podél levé řady, nabrat 2 kostky, obloukem doleva do žlutého pole, vyložit makrem unload.",
   "start": {"x": 132, "z": 192, "heading": 90},
   "steps": [
-    {"cmd": "intake", "arm": "LEFT"},
+    {"cmd": "arm", "rot": "CCW"},
     {"cmd": "drive", "mm": 560},
-    {"cmd": "intake", "arm": "NONE"},
+    {"cmd": "drive", "mm": 150},
     {"cmd": "drive", "mm": -40},
     {"cmd": "curve", "deg": 90},
     {"cmd": "drive", "mm": 250},
-    {"cmd": "unload"},
-    {"cmd": "drive", "mm": -60}
+    {"cmd": "unload"}
   ]
 }

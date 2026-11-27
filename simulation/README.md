@@ -46,8 +46,9 @@ the top wall above the left row, facing down; `--start` overrides it). Speeds co
 
 **Program format** – a plain array of steps, or `{"start": {"x": mm, "z": mm, "heading": deg}, "steps": [...], "macros": {...}}`.
 Supported steps: `drive` (`mm`, `speed`, `hold`, `tail_s`, `tail_speed`), `drive_time` (`s`, `speed`), `turn` (`deg`, `speed`),
-`curve` (`deg`, `inner`, `outer`, `s_per_90`), `wait` (`s`), `macro` (`name`), `log`, `unload` (leaves the stored pieces) and the
-sim-only `intake` (`arm`: `LEFT` / `RIGHT` / `NONE`). Speeds are wheel deg/s as on the real robot. Other steps are skipped.
+`curve` (`deg`, `inner`, `outer`, `s_per_90`), `wait` (`s`), `arm` (`rot` CW/CCW/NONE, `slot` LEFT/RIGHT/toggle, `extra`, `nudge`;
+takes as long as motor C on the real robot, from `robot.arm`), `macro` (`name`, macros of mission.json), `unload` (= macro `unload`), `log`.
+Speeds are wheel deg/s as on the real robot. Other steps (`pick_row`, …) are skipped.
 
 **Keys, mode 1:** `1`–`4` speed ×1/×2/×4/×8, `R` restart, `Esc` menu, `T` top/orbit view, `F` follow robot,
 right mouse drag orbit, wheel zoom.
@@ -56,7 +57,7 @@ right mouse drag orbit, wheel zoom.
 - `↑↓←→` / `WASD`: drive, turn on the spot; forward + left/right = arc (`curve`)
 - `Shift`: slow (`drive`/`turn` with a lower `speed`; the arc pivots around the inner wheel, `inner 0 / outer 300`)
 - `Q` / `E`: turn exactly 90° left / right
-- `J` / `L`: lower the left / right arm, `K`: raise it; `Space`: unload
+- `J` / `K` / `L`: hands CW / NONE / CCW, `H`: shift the magazine (`arm slot toggle`); `Space`: macro `unload`
 - `Backspace`: undo the last step (restarts and replays the rest quickly)
 - `Ctrl+S`: save, `Enter`: save and play it in mode 1, `R`: start over, `Esc`: menu
 
@@ -77,10 +78,18 @@ lock-step: sim time only runs while Python is in `hw.sleep()`. See `../hw_sim.py
 | `… -- --ours main --no-python` + `python3 main.py --sim main` | Start Python yourself (its output in your terminal). |
 
 Python errors are written to `simulation/ours_python.log`. The robot is `data/robot_ours.json`
-(365×220 mm, axle 175 mm behind the front). Mechanism model: lowered hands capture a crosswise
-piece at the pick-up line and turn it by 90°; two magazine lanes (LEFT/RIGHT) of 2 pieces, a shift
-switches the active lane at once (a piece still being captured goes to the new lane); reversing
-≥ 50 mm drops the active lane (unload). The sensor sees pieces only (floor = WHITE, reflected 17), no black lines.
+(365×220 mm, axle 175 mm behind the front, `"mechanism": "ours"` → `src/Ours/OurMechanism.cs`, used by all modes):
+- **hands** at the very front (pick line 175 mm ahead of the axle), left and right, 90° out of phase: `CW` / `CCW` lowers one,
+  `NONE` none. A crosswise piece is caught and turned by 90° while the robot drives on
+  (slot RIGHT + CCW or slot LEFT + CW = the right end goes in front);
+- **neck** behind the hands for 2 pieces in a row: the pieces stand on the floor, so they move backwards relative to the
+  robot when it drives forward, until they hit the piece behind or the rear wall of the active slot;
+- **magazine** behind the neck: 2 slots (LEFT/RIGHT) side by side, 1 piece each; the active one lines up with the neck,
+  a shift moves the magazine sideways. Max 4 pieces; a row goes 1 → slot R, 2 → slot L (after the shift), 3 + 4 neck;
+- **reversing**: the neck + active slot stay on the floor and leave through the front; the other slot keeps its piece
+  until a shift. Driving forward onto a piece lying lengthwise in the lane takes it back into the neck.
+The neck/magazine positions are estimated (neck right behind the hands, magazine right behind the neck).
+The sensor sees pieces only (floor = WHITE, reflected 17), no black lines.
 
 ## Structure
 

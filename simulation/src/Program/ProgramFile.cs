@@ -22,6 +22,13 @@ public static class DriveConfig
     // Manual mode (Shift = slow / pivot curve).
     public static float SlowSpeed = 150, SlowTurnSpeed = 80, PivotInner = 0, PivotOuter = 300;
     public static string Source = "defaults";
+    // Motor C (robot.arm): times of the mechanism moves, initial state, macros of mission.json.
+    public static (string rot, string slot) ArmInitial = ("CW", "RIGHT");
+    public static float ArmSpeed = 1000, ShiftSpeed = 1400, NudgeDeg = 800;
+    public static Dictionary<string, float> RotPositions = new() { ["CW"] = -1000, ["NONE"] = 0, ["CCW"] = 1000 };
+    public static Dictionary<string, float> Transitions = new();
+    public static Dictionary<string, float> ShiftExtra = new();
+    public static JsonObject Macros = new();
 
     /// <summary>Wheel speed in deg/s → tyre speed in m/s.</summary>
     public static float Ms(float degPerS) => degPerS / DegPerMm * 0.001f;
@@ -43,6 +50,28 @@ public static class DriveConfig
             CurveOuter = F("curve_outer_speed", CurveOuter);
             CurveSPer90 = F("curve_s_per_90", CurveSPer90);
             Source = path;
+            var root = JsonNode.Parse(File.ReadAllText(path));
+            if (root?["macros"] is JsonObject m) Macros = (JsonObject)m.DeepClone();
+            var a = root?["robot"]?["arm"];
+            if (a != null)
+            {
+                float A(string k, float def) => a[k] is JsonValue v && v.TryGetValue(out double x) ? (float)x : def;
+                ArmSpeed = A("speed", ArmSpeed);
+                ShiftSpeed = A("shift_speed", ShiftSpeed);
+                NudgeDeg = A("nudge_deg", NudgeDeg);
+                if (a["initial"] is JsonObject ini)
+                    ArmInitial = (ini["rot"]?.GetValue<string>() ?? "CW", ini["slot"]?.GetValue<string>() ?? "RIGHT");
+                void Dict(string key, Dictionary<string, float> into)
+                {
+                    if (a[key] is not JsonObject o) return;
+                    into.Clear();
+                    foreach (var kv in o)
+                        if (!kv.Key.StartsWith("_") && kv.Value is JsonValue v && v.TryGetValue(out double x)) into[kv.Key.Replace(" ", "").ToUpperInvariant()] = (float)x;
+                }
+                Dict("rot_positions", RotPositions);
+                Dict("transitions", Transitions);
+                Dict("shift_extra", ShiftExtra);
+            }
         }
         catch (Exception e) { GD.PushWarning($"mission.json: {e.Message}"); }
     }

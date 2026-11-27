@@ -27,6 +27,12 @@ public abstract partial class SimDriver : Node
         M = new Motion(Robot, Ticker, () => SimTime) { Log = Log };
         Robot.Intake.Candidates = () => Dominos;
         Robot.Intake.CaptureStarted += (d, arm) => Log($"    nabrána kostka #{d.Id} [{PColors.Letter(d.C0)}{PColors.Letter(d.C1)}] ramenem {arm}");
+        if (Robot.Mech != null)
+        {
+            Robot.Mech.Candidates = () => Dominos;
+            Robot.Mech.Log = m => Log("    " + m);
+            Robot.Mech.SetState(DriveConfig.ArmInitial.rot, DriveConfig.ArmInitial.slot);
+        }
     }
 
     protected void Log(string s)
@@ -47,6 +53,7 @@ public abstract partial class SimDriver : Node
 
     public string CarriedText()
     {
+        if (Robot.Mech != null) return Robot.Mech.Text();
         var sb = new StringBuilder();
         foreach (var d in Robot.Intake.Stored) sb.Append($"#{d.Id}[{PColors.Letter(d.C0)}{PColors.Letter(d.C1)}] ");
         return sb.Length == 0 ? "-" : sb.ToString();
@@ -76,6 +83,12 @@ public partial class ProgramRunner : SimDriver
         base._Ready();
         Steps = StepsOverride ?? Program.Flatten();
         Exec = new StepExecutor(Robot, M, () => SimTime) { Log = Log };
+        if (Program?.Macros is { Count: > 0 } pm)
+        {
+            var merged = (System.Text.Json.Nodes.JsonObject)DriveConfig.Macros.DeepClone();
+            foreach (var kv in pm) merged[kv.Key] = kv.Value?.DeepClone();
+            Exec.Macros = merged;
+        }
     }
 
     public override void _PhysicsProcess(double delta)

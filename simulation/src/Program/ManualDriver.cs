@@ -40,6 +40,12 @@ public partial class ManualDriver : SimDriver
         Name = "ManualDriver";
         base._Ready();
         Exec = new StepExecutor(Robot, M, () => SimTime) { Log = Log };
+        if (Robot.Mech != null)
+        {
+            Robot.Mech.Candidates = () => Dominos;
+            Robot.Mech.Log = m => Log("    " + m);
+            Robot.Mech.SetState(DriveConfig.ArmInitial.rot, DriveConfig.ArmInitial.slot);
+        }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -244,21 +250,36 @@ public partial class ManualDriver : SimDriver
         AddOrMergeAngle((JsonObject)st.DeepClone());
     }
 
-    public void SetArm(string arm)
+    /// <summary>Motor C step (rot CW / CCW / NONE, slot toggle), executed with its real duration and recorded.</summary>
+    public void Arm(string rot, string slot = null)
     {
-        if (!Idle) return;
-        var st = new JsonObject { ["cmd"] = "intake", ["arm"] = arm };
-        _ = Exec.Exec(st);
-        if (Steps.LastOrDefault() is { } prev && Cmd(prev) == "intake") Steps.RemoveAt(Steps.Count - 1);
-        Add(st);
+        if (!Idle || Robot.Mech == null) return;
+        if (rot != null && rot == Robot.Mech.Rot) return;
+        var st = new JsonObject { ["cmd"] = "arm" };
+        if (rot != null) st["rot"] = rot;
+        if (slot != null) st["slot"] = slot;
+        double t0 = SimTime;
+        RunNoContext(() => _busy = DoRecord(st, t0, merge: rot != null && slot == null));
     }
 
+    /// <summary>Unload = macro "unload" of mission.json (drives by itself), recorded as {"cmd": "unload"}.</summary>
     public void Unload()
     {
         if (!Idle) return;
-        var st = new JsonObject { ["cmd"] = "unload" };
-        _ = Exec.Exec(st);
-        Add(st);
+        double t0 = SimTime;
+        RunNoContext(() => _busy = DoRecord(new JsonObject { ["cmd"] = "unload" }, t0, false));
+    }
+
+    async Task DoRecord(JsonObject st, double t0, bool merge)
+    {
+        float before = Exec.RefHeading;
+        await Exec.Exec(st);
+        MoveTime += SimTime - t0;
+        // Two rotation changes in a row: only the last one matters.
+        if (merge && Steps.LastOrDefault() is { } prev && Cmd(prev) == "arm" && prev.Count == 2 && prev["rot"] != null)
+            Steps.RemoveAt(Steps.Count - 1);
+        Add((JsonObject)st.DeepClone());
+        if (Exec.RefHeading != before) Log("    (makro změnilo směr)");
     }
 
     /// <summary>Undo = restart and replay all steps but the last one (fast).</summary>
@@ -296,7 +317,7 @@ public partial class ManualDriver : SimDriver
         float hdg = -Mathf.RadToDeg(Geo.Wrap(Robot.Theta - Main.StartHeading));
         return $"MÓD 2 – ruční jízda se záznamem   kroků: {Steps.Count}   čas jízdy (bez čekání) ≈ {MoveTime:0.0} s\n" +
                $"Robot: {seg}   x = {Robot.Pos2.X * 1000:0} mm, z = {Robot.Pos2.Y * 1000:0} mm, směr od startu {hdg:+0;-0}° (+ = doleva)\n" +
-               $"Zásobník: {CarriedText()}   rameno: {Robot.Intake.Arm}\n" +
+               $"Mechanismus: {CarriedText()}\n" +
                Scorer.Summary(Dominos, Layout) + (Status != "" ? $"\n{Status}" : "");
     }
 

@@ -35,6 +35,8 @@ public partial class Robot : RigidBody3D
     public double EncoderL, EncoderR;           // wheel angle, rad
 
     public Intake Intake { get; private set; }
+    /// <summary>Our mechanism (RobotSpec.Mechanism == "ours"), else null.</summary>
+    public OurMechanism Mech { get; private set; }
 
     public Vector2 Pos2 => Geo.XZ(GlobalPosition);
     public float Theta => Geo.HeadingOf(GlobalBasis);
@@ -119,6 +121,11 @@ public partial class Robot : RigidBody3D
 
         Intake = new Intake();
         AddChild(Intake);
+        if (RobotSpec.Mechanism == "ours")
+        {
+            Mech = new OurMechanism();
+            AddChild(Mech);
+        }
     }
 
     public void SetWheelSpeeds(float left, float right)

@@ -39,9 +39,6 @@ public partial class OurRunner : Node, IMissionInfo
 
     // Sensor / mechanism geometry (robot frame: x forward, z right; metres).
     static readonly Vector2 SensorLocal = new(0.210f, -0.024f); // left side, sees one half of a crosswise piece
-    const float PickX = 0.175f;            // front edge of the pick-up
-    const float LaneOffset = 0.045f;       // inactive lane sideways offset (drawing only)
-    const float ReleaseMm = 50f;           // reversing this far drops the active lane
 
     public double SimTime { get; private set; }
     public string State { get; private set; } = "čekám na Python…";
@@ -55,22 +52,13 @@ public partial class OurRunner : Node, IMissionInfo
     bool _done;
     float _unwrapped, _lastTheta;
 
-    // Mechanism state.
-    string _rot = "CCW", _slot = "RIGHT";
-    readonly Dictionary<string, List<(Domino d, float psi)>> _lanes = new() { ["LEFT"] = new(), ["RIGHT"] = new() };
-    Domino _cap;
-    Vector2 _capStart;
-    float _capPsi0, _capSign, _capTravel0, _capNeeded;
-    string _capLane;
-    float _travel, _reverse;
-    Vector2 _lastPos;
-    bool _hasLast;
-    readonly List<Domino> _released = new();
-    readonly List<Domino> _placed = new();
-
     public override void _Ready()
     {
         Name = "OurRunner";
+        Robot.Mech.Candidates = () => Dominos;
+        Robot.Mech.Log = m => GD.Print($"[{SimTime,6:0.00}] {m}");
+        var init = DriveConfig.ArmInitial;
+        Robot.Mech.SetState(init.rot, init.slot);
         _lastTheta = Robot.Theta;
         _srv = new TcpListener(IPAddress.Loopback, Port);
         _srv.Start();
@@ -103,7 +91,6 @@ public partial class OurRunner : Node, IMissionInfo
         }
         if (_wake < 0) return;           // should not happen: Serve() blocks until a sleep
         SimTime += delta;
-        UpdateMechanism();
         if (SimTime + 1e-6 >= _wake)
         {
             _wake = -1;
@@ -144,7 +131,7 @@ public partial class OurRunner : Node, IMissionInfo
                 case "arm":
                 {
                     var v = arg.Split(' ');
-                    SetArm(v[0], v[1]);
+                    Robot.Mech.SetState(v[0], v[1]);
                     Reply("ok");
                     break;
                 }
@@ -216,123 +203,11 @@ public partial class OurRunner : Node, IMissionInfo
         return ("WHITE", 17); // podlaha (reálný senzor ji čte jako GREEN, ale odražené světlo ~17)
     }
 
-    // ------------------------------------------------------------------ mechanism
-
-    void SetArm(string rot, string slot)
-    {
-        if (slot != _slot)
-        {
-            GD.Print($"[{SimTime,6:0.00}] [sim] posun zásobníku {_slot} -> {slot}" + (_cap != null ? " (kostka ještě nedojela -> jde do nového slotu!)" : ""));
-            if (_cap != null) _capLane = slot;
-            _reverse = 0f; // nový slot vyjede až při couvání po posunu
-        }
-        _rot = rot;
-        _slot = slot;
-    }
-
-    static float LaneX(int index) => PickX - 0.01f - Domino.L / 2f - (1 - index) * Domino.L; // 0 = rear, 1 = front
-
-    float LaneZ(string lane) => lane == _slot ? 0f : (lane == "LEFT" ? -LaneOffset : LaneOffset);
-
-    void UpdateMechanism()
-    {
-        var pos = Robot.Pos2;
-        float th = Robot.Theta;
-        float step = _hasLast ? (pos - _lastPos).Dot(Geo.Dir(th)) : 0f;
-        _travel += step;
-        _lastPos = pos;
-        _hasLast = true;
-
-        // Capture in progress: driven by forward travel.
-        if (_cap != null)
-        {
-            var lane = _lanes[_capLane];
-            int idx = Math.Min(lane.Count, 1);
-            float tx = LaneX(idx);
-            float t = Mathf.Clamp((_travel - _capTravel0) / _capNeeded, 0f, 1f);
-            var local = new Vector2(Mathf.Lerp(_capStart.X, tx, t), Mathf.Lerp(_capStart.Y, LaneZ(_capLane), t));
-            float psi = _capPsi0 + _capSign * Mathf.Pi / 2f * t;
-            if (t >= 1f)
-            {
-                psi = Mathf.Abs(Geo.Wrap(psi)) < Mathf.Pi / 2f ? 0f : Mathf.Pi;
-                lane.Add((_cap, psi));
-                GD.Print($"[{SimTime,6:0.00}] [sim] kostka #{_cap.Id} v zásobníku {_capLane} ({lane.Count}/2)");
-                _cap = null;
-            }
-            else SetPiece(_cap, local, psi);
-        }
-        else if (_rot != "NONE" && _lanes[_slot].Count < 2)
-        {
-            TryCapture(pos, th);
-        }
-
-        foreach (var kv in _lanes)
-            for (int i = 0; i < kv.Value.Count; i++)
-                SetPiece(kv.Value[i].d, new Vector2(LaneX(kv.Value.Count == 1 ? 0 : i), LaneZ(kv.Key)), kv.Value[i].psi);
-
-        // Unload: reversing leaves the active lane on the floor.
-        if (step < -1e-5) _reverse += -step * 1000f;
-        else if (step > 1e-5) _reverse = 0f;
-        if (_reverse >= ReleaseMm && _lanes[_slot].Count > 0)
-        {
-            foreach (var (d, _) in _lanes[_slot])
-            {
-                d.SetCarried(false);
-                _released.Add(d);
-                if (!_placed.Contains(d)) _placed.Add(d);
-            }
-            GD.Print($"[{SimTime,6:0.00}] [sim] couvání: vyjely kostky ze zásobníku {_slot}: " + string.Join(" ", _lanes[_slot].Select(x => "#" + x.d.Id)));
-            _lanes[_slot].Clear();
-            _reverse = 0f; // další slot vyjede až při dalším couvání
-        }
-        for (int i = _released.Count - 1; i >= 0; i--)
-            if (_released[i].Pos2.DistanceTo(pos) > 0.30f)
-            {
-                Robot.RemoveCollisionExceptionWith(_released[i]);
-                _released.RemoveAt(i);
-            }
-    }
-
-    void TryCapture(Vector2 pos, float th)
-    {
-        var lateral = Geo.Right(th);
-        foreach (var d in Dominos)
-        {
-            if (d.Carried || !d.Upright || _placed.Contains(d)) continue;
-            var local = Geo.Unrotate(d.Pos2 - pos, th);
-            if (local.X > PickX || local.X < PickX - 0.05f) continue;
-            if (Mathf.Abs(local.Y) > 0.035f) continue;
-            if (Mathf.Abs(Geo.Dir(d.Axis).Dot(lateral)) < 0.85f) continue; // must lie crosswise
-            bool leftEndFront = (_slot == "RIGHT" && _rot == "CCW") || (_slot == "LEFT" && _rot == "CW");
-            _cap = d;
-            d.SetCarried(true);
-            Robot.AddCollisionExceptionWith(d);
-            _capStart = local;
-            _capPsi0 = Geo.Wrap(d.Axis - th);
-            _capSign = leftEndFront ? 1f : -1f; // +θ = clockwise from above
-            _capLane = _slot;
-            _capTravel0 = _travel;
-            _capNeeded = Mathf.Max(local.X - LaneX(Math.Min(_lanes[_slot].Count, 1)), 0.03f);
-            GD.Print($"[{SimTime,6:0.00}] [sim] nabírám kostku #{d.Id} ({_rot}, slot {_slot})");
-            return;
-        }
-    }
-
-    void SetPiece(Domino d, Vector2 local, float psi)
-    {
-        float th = Robot.Theta;
-        d.GlobalTransform = new Transform3D(Geo.YawBasis(th + psi), Geo.V3(Robot.LocalToField(local), Domino.H / 2f));
-    }
-
     // ------------------------------------------------------------------ HUD
 
-    public string CarriedText()
-    {
-        string Lane(string k) => k + ":" + (_lanes[k].Count == 0 ? "-" : string.Join(",", _lanes[k].Select(x => $"#{x.d.Id}")));
-        return $"ruce {_rot}, slot {_slot}   {Lane("LEFT")}  {Lane("RIGHT")}" + (_cap != null ? $"   nabírá #{_cap.Id}" : "");
-    }
+    public string CarriedText() => Robot.Mech.Text();
 
-    public int PlacedCount => _placed.Count;
+    public int PlacedCount => Robot.Mech.Placed.Count;
 
     public string Summary()
     {

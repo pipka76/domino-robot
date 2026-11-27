@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Godot;
@@ -9,7 +10,8 @@ namespace DominoSim;
 /// Executes one program step (mission.json format) on the sim robot. Like the real robot with
 /// drive.absolute_heading, turn/curve aim at a heading counted from the start (RefHeading), so
 /// turn errors do not add up and every drive holds that heading.
-/// Supported: drive, drive_time, turn, curve, wait, intake (sim only), unload, log. Others are skipped.
+/// Supported: drive, drive_time, turn, curve, wait, arm (rot / slot / nudge, our mechanism), macro, unload (= macro unload), log.
+/// Others (pick_row, …) are skipped.
 /// </summary>
 public sealed class StepExecutor
 {
@@ -19,6 +21,8 @@ public sealed class StepExecutor
     public Action<string> Log = _ => { };
     /// <summary>Target heading in sim radians (+ = clockwise).</summary>
     public float RefHeading;
+    /// <summary>Macros for "macro" / "unload" steps (mission.json macros, overridden by the program's own).</summary>
+    public JsonObject Macros = DriveConfig.Macros;
 
     public StepExecutor(Robot r, Motion m, Func<double> now)
     {
@@ -50,7 +54,9 @@ public sealed class StepExecutor
             "curve" => $"curve {F(st, "deg", 0):+0;-0}°" + (st["inner"] != null ? $" ({F(st, "inner", 0):0}/{F(st, "outer", 0):0})" : ""),
             "drive_time" => $"drive_time {F(st, "s", 0):0.0#} s",
             "wait" => $"wait {F(st, "s", 0):0.0#} s",
-            "intake" => $"intake {S(st, "arm", "NONE")}",
+            "arm" => "arm" + (st["rot"] != null ? $" {S(st, "rot", "")}" : "") + (st["slot"] != null ? $" slot {S(st, "slot", "")}" : "")
+                     + (st["nudge"] != null ? " nudge" : ""),
+            "macro" => $"macro {S(st, "name", "?")}",
             _ => cmd,
         };
     }
@@ -91,23 +97,62 @@ public sealed class StepExecutor
             case "wait":
                 await _m.Wait(F(st, "s", 0));
                 return true;
-            case "intake":
-                _r.Intake.SetArm(S(st, "arm", "NONE").ToUpperInvariant() switch
+            case "arm":
+            {
+                var mech = _r.Mech;
+                if (mech == null) return false;
+                double t = 0;
+                string rot = S(st, "rot", null)?.ToUpperInvariant(), slot = S(st, "slot", null)?.ToUpperInvariant();
+                if (slot == "TOGGLE") slot = mech.Slot == "LEFT" ? "RIGHT" : "LEFT";
+                if (slot != null && slot != mech.Slot)
                 {
-                    "LEFT" => Intake.ArmMode.Left,
-                    "RIGHT" => Intake.ArmMode.Right,
-                    _ => Intake.ArmMode.Retracted,
-                });
+                    // Shift: motor C turns past the end rotation of the slot (as mechanism.py, robot.arm.transitions).
+                    string end = slot == "LEFT" ? "CW" : "CCW";
+                    float deg = DriveConfig.Transitions.GetValueOrDefault($"{mech.Rot},{mech.Slot}>{end},{slot}", 5000f);
+                    deg = Mathf.Abs(deg) + DriveConfig.ShiftExtra.GetValueOrDefault(slot, 0f) + F(st, "extra", 0);
+                    t += deg / DriveConfig.ShiftSpeed;
+                    mech.SetState(end, slot);
+                }
+                if (rot != null && rot != mech.Rot)
+                {
+                    t += Mathf.Abs(Pos(rot) - Pos(mech.Rot)) / DriveConfig.ArmSpeed;
+                    mech.SetState(rot, null);
+                }
+                if (st["nudge"] is JsonValue nv && !(nv.TryGetValue(out bool nb) && !nb))
+                {
+                    string end = mech.Slot == "LEFT" ? "CW" : "CCW";
+                    float extra = nv.TryGetValue(out double nd) ? (float)nd : DriveConfig.NudgeDeg;
+                    t += (Mathf.Abs(Pos(end) - Pos(mech.Rot)) + extra) / DriveConfig.ShiftSpeed + 0.3;
+                    mech.SetState(end, null);
+                }
+                await _m.Wait(t);
                 return true;
+            }
             case "unload":
-                _r.Intake.Release();
-                return true;
+                return await RunMacro(S(st, "macro", "unload"));
+            case "macro":
+                return await RunMacro(S(st, "name", ""));
             case "log":
                 Log("    log: " + S(st, "msg", ""));
                 return true;
             default:
                 return false;
         }
+    }
+
+    static float Pos(string rot) => DriveConfig.RotPositions.GetValueOrDefault(rot ?? "NONE", 0f);
+
+    int _depth;
+
+    async Task<bool> RunMacro(string name)
+    {
+        if (Macros?[name] is not JsonArray steps || _depth > 8) { Log($"    makro '{name}' není"); return false; }
+        _depth++;
+        foreach (var o in steps)
+            if (o is JsonObject st && st["cmd"] != null)
+                if (!await Exec(st)) Log($"    ({StepExecutor.Describe(st)} v makru přeskočeno)");
+        _depth--;
+        return true;
     }
 
     async Task DriveFor(float seconds, float v)

@@ -41,7 +41,7 @@ public partial class Main : Node3D
     const string PlayHelp = "[1/2/3/4] rychlost x1/x2/x4/x8   [R] znovu   [Esc] menu   [T] pohled shora/orbit   [F] sledovat robota   pravé tl. myši = orbit, kolečko = zoom";
     const string DriveHelp =
         "[↑↓←→ / WASD] jízda, otáčení, ↑+←/→ oblouk   [Shift] pomalu (oblouk kolem kola)   [Q/E] otočit přesně o 90° vlevo/vpravo\n" +
-        "[J/L] spustit levé/pravé rameno  [K] zvednout   [Mezerník] vyložit   [Backspace] zpět (smaže poslední krok)\n" +
+        "[J/K/L] ruce CW / NONE / CCW   [H] posun zásobníku   [Mezerník] vyložit (makro unload)   [Backspace] zpět (smaže poslední krok)\n" +
         "[Ctrl+S] uložit   [Enter] uložit a přehrát v módu 1   [R] začít znovu   [Esc] menu   [T/F] kamera";
 
     public override void _Ready()
@@ -258,9 +258,10 @@ public partial class Main : Node3D
             {
                 case Key.Q: _driver.ExactTurn(90); break;
                 case Key.E: _driver.ExactTurn(-90); break;
-                case Key.J: _driver.SetArm("LEFT"); break;
-                case Key.L: _driver.SetArm("RIGHT"); break;
-                case Key.K: _driver.SetArm("NONE"); break;
+                case Key.J: _driver.Arm("CW"); break;
+                case Key.L: _driver.Arm("CCW"); break;
+                case Key.K: _driver.Arm("NONE"); break;
+                case Key.H: _driver.Arm(null, "toggle"); break;
                 case Key.Space: _driver.Unload(); break;
                 case Key.Backspace: _driver.Undo(); break;
                 case Key.S when k.CtrlPressed || k.MetaPressed: _driver.Save(); break;

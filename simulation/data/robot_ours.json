@@ -1,5 +1,6 @@
 {
   "comment": "Náš robot (Metoděj): tělo 365 mm (175 před osou kol – nabírání, 190 za ní – zásobník), šířka 220 mm, rozchod kol 162 mm (stopa 2.9 deg kola na 1 deg robota). Barevný senzor 35 mm před předkem (210 od osy). Používá --ours.",
+  "mechanism": "ours",
   "length": 365,
   "width": 178,
   "bodyWidth": 220,
